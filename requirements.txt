@@ -1,0 +1,7 @@
+uvicorn
+SQLAlchemy
+asyncpg
+pgvector
+pydantic-settings
+alembic
+python-dotenv
