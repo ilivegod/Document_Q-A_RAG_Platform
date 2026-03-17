@@ -1,10 +1,10 @@
 from sqlalchemy.orm import mapped_column
 from sqlalchemy import String, DateTime, func
-from app.database import base
+from app.database import Base
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
-class User(base):
+class User(Base):
     __tablename__ = "user"
 
     id = mapped_column(UUID, primary_key=True, default=uuid.uuid4)

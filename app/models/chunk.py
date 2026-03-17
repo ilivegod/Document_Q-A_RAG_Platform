@@ -1,11 +1,11 @@
 from sqlalchemy.orm import mapped_column
 from sqlalchemy import String, Integer, ForeignKey, DateTime, Text
-from app.database import base
+from app.database import Base
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import VECTOR
 import uuid
 
-class Chunk(base):
+class Chunk(Base):
     __tablename__ = "chunk"
 
     id = mapped_column(UUID, primary_key=True,default=uuid.uuid4)

@@ -1,4 +1,4 @@
-from .database import base
+from app.database import Base
 from sqlalchemy.dialects.postgresql import UUID
 from enum import Enum
 from sqlalchemy import ForeignKey,DateTime, String, Integer, func, Boolean, Enum as SQLEnum
@@ -12,7 +12,7 @@ class Document_Status(str, Enum):
     FAILED = "failed"
 
 
-class Document(base):
+class Document(Base):
     __tablename__ = "documents"
 
     id = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
