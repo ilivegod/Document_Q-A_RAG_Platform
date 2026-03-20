@@ -5,3 +5,5 @@ pgvector
 pydantic-settings
 alembic
 python-dotenv
+langchain-community
+pypdf
