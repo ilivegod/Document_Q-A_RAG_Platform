@@ -7,3 +7,5 @@ alembic
 python-dotenv
 langchain-community
 pypdf
+torch
+sentence-transformers
