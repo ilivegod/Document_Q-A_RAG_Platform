@@ -1,4 +1,11 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, status, APIRouter, Depends, BackgroundTasks
+from fastapi import (
+    UploadFile,
+    File,
+    HTTPException,
+    APIRouter,
+    Depends,
+    BackgroundTasks,
+)
 from pathlib import Path
 import uuid
 
@@ -10,62 +17,60 @@ from app.services.pipeline import process_document
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
-ALLOWED_EXTENSISONS = {".pdf" , ".docx"}
-MAX_FILE_SIZE = 10 * 1024 * 1024
+ALLOWED_EXTENSISONS = {".pdf", ".docx"}
+MAX_FILE_SIZE = 50 * 1024 * 1024
 
-TEMP_USER_ID = uuid.UUID('11111111-1111-1111-1111-111111111111')
+TEMP_USER_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 
 router = APIRouter()
-initial_status  = Document_Status.UPLOADED
+initial_status = Document_Status.UPLOADED
 
 
 @router.post("/documents/upload")
-async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), db:AsyncSession = Depends(get_db)):
-    #validating file type
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    # validating file type
     file_extension = Path(file.filename).suffix.lower()
     if file_extension not in ALLOWED_EXTENSISONS:
-        raise HTTPException(status_code=400, detail = "Invalid file type. Only PDF/DOCX allowed.")
-    
-    #checking file size
+        raise HTTPException(
+            status_code=400, detail="Invalid file type. Only PDF/DOCX allowed."
+        )
+
+    # checking file size
     file_content = await file.read()
-    await file.seek(0) 
+    await file.seek(0)
     file_size = len(file_content)
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File too large.")
 
-    # saving in memory 
+    # saving in memory
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_path = UPLOAD_DIR / unique_filename
 
     try:
-       with file_path.open("wb") as f:
-        f.write(file_content)
+        with file_path.open("wb") as f:
+            f.write(file_content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not save file: {e}")
 
-
-    #saving in db
+    # saving in db
 
     db_record = Document(
-        user_id = TEMP_USER_ID,
-        file_name = file.filename,
-        file_type = file_extension,
-        file_path = str(file_path),
-        status = initial_status
+        user_id=TEMP_USER_ID,
+        file_name=file.filename,
+        file_type=file_extension,
+        file_path=str(file_path),
+        status=initial_status,
     )
     db.add(db_record)
     await db.commit()
     await db.refresh(db_record)
 
+    print(f"Adding background task for document {db_record.id}")
     background_tasks.add_task(process_document, db_record.id)
 
     return {"id": str(db_record.id), "status": db_record.status}
-    
-
-    
-
-
-
-    
-

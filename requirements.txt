@@ -1,3 +1,4 @@
+fastapi
 uvicorn
 SQLAlchemy
 asyncpg
@@ -5,7 +6,10 @@ pgvector
 pydantic-settings
 alembic
 python-dotenv
+python-multipart
 langchain-community
 pypdf
-torch
-sentence-transformers
+numpy<2
+torch==2.2.2
+transformers==4.44.0
+sentence-transformers==3.0.1

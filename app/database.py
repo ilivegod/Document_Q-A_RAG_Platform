@@ -7,6 +7,7 @@ engine = create_async_engine(settings.database_url)
 
 async_session = async_sessionmaker(engine)
 
+
 class Base(DeclarativeBase):
     pass
 

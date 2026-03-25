@@ -14,6 +14,10 @@ docker start docqa-postgres
 
 # Check running containers
 
+# run fastApi
+
+uvicorn app.main:app --reload
+
 docker ps
 
 # See container logs
