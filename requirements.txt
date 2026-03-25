@@ -9,6 +9,7 @@ python-dotenv
 python-multipart
 langchain-community
 pypdf
+langchain-google-genai
 numpy<2
 torch==2.2.2
 transformers==4.44.0
