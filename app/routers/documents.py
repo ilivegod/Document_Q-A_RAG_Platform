@@ -1,10 +1,12 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, status, APIRouter, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, status, APIRouter, Depends, BackgroundTasks
 from pathlib import Path
 import uuid
 
 from app.models.document import Document_Status, Document
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services.pipeline import process_document
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -19,7 +21,7 @@ initial_status  = Document_Status.UPLOADED
 
 
 @router.post("/documents/upload")
-async def upload_document(file: UploadFile = File(...), db:AsyncSession = Depends(get_db)):
+async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), db:AsyncSession = Depends(get_db)):
     #validating file type
     file_extension = Path(file.filename).suffix.lower()
     if file_extension not in ALLOWED_EXTENSISONS:
@@ -55,6 +57,8 @@ async def upload_document(file: UploadFile = File(...), db:AsyncSession = Depend
     db.add(db_record)
     await db.commit()
     await db.refresh(db_record)
+
+    background_tasks.add_task(process_document, db_record.id)
 
     return {"id": str(db_record.id), "status": db_record.status}
     
