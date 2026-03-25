@@ -4,7 +4,7 @@ from sentence_transformers import SentenceTransformer
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-def embedding(chunks_list):
+def embed_chunks(chunks_list):
     chunk_content = [chunk.content for chunk in chunks_list]
 
     embeddings = model.encode(chunk_content)
