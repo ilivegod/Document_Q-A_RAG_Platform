@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from sqlalchemy import text
 from app.routers.documents import router as documents_router
+from app.routers.query import router as query_router
 
 import logging
 
@@ -11,6 +12,7 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI()
 
 app.include_router(documents_router)
+app.include_router(query_router)
 
 
 @app.get("/health")

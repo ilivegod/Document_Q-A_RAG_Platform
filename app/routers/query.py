@@ -11,7 +11,7 @@ router = APIRouter()
 async def query_document(question: str, db: AsyncSession = Depends(get_db)):
     if not question:
         return None
-    retrieved_text = similarity_search(question)
-    result = llm_prompt(retrieved_text)
+    retrieved_text = await similarity_search(question, db)
+    result = llm_prompt(question, retrieved_text)
 
-    return result
+    return {"answer": result, "question": question}
