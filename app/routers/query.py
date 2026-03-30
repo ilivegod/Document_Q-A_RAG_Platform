@@ -4,14 +4,21 @@ from app.database import get_db
 from app.services.retrieval import similarity_search
 from app.services.qa_chain import llm_prompt
 
+from app.models.user import User
+from app.dependencies.getUser import get_current_user
+
 router = APIRouter()
 
 
 @router.post("/documents/query")
-async def query_document(question: str, db: AsyncSession = Depends(get_db)):
+async def query_document(
+    question: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if not question:
         return None
-    retrieved_text = await similarity_search(question, db)
+    retrieved_text = await similarity_search(question, db, current_user.id)
     result = llm_prompt(question, retrieved_text)
 
     return {
