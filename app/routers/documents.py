@@ -14,13 +14,13 @@ from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.pipeline import process_document
+from app.models.user import User
+from app.dependencies.getUser import get_current_user
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 ALLOWED_EXTENSISONS = {".pdf", ".docx"}
 MAX_FILE_SIZE = 50 * 1024 * 1024
-
-TEMP_USER_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 
 router = APIRouter()
@@ -32,6 +32,7 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     # validating file type
     file_extension = Path(file.filename).suffix.lower()
@@ -60,7 +61,7 @@ async def upload_document(
     # saving in db
 
     db_record = Document(
-        user_id=TEMP_USER_ID,
+        user_id=current_user.id,
         file_name=file.filename,
         file_type=file_extension,
         file_path=str(file_path),

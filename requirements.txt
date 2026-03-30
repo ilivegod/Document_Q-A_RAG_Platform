@@ -10,6 +10,9 @@ python-multipart
 langchain-community
 pypdf
 langchain-google-genai
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
 numpy<2
 torch==2.2.2
 transformers==4.44.0
