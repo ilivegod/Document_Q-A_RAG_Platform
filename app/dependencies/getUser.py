@@ -15,7 +15,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 async def get_user(db: AsyncSession, email: str):
     result = await db.execute(select(User).where(User.email == email))
-    return result
+    return result.scalar_one_or_none()
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str):
