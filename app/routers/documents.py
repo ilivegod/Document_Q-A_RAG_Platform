@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.pipeline import process_document
 from app.models.user import User
 from app.dependencies.getUser import get_current_user
+from app.workers.tasks import process_document_task
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -72,6 +73,7 @@ async def upload_document(
     await db.refresh(db_record)
 
     print(f"Adding background task for document {db_record.id}")
-    background_tasks.add_task(process_document, db_record.id)
+    # background_tasks.add_task(process_document, db_record.id)
+    process_document_task.delay(str(db_record.id))
 
     return {"id": str(db_record.id), "status": db_record.status}
