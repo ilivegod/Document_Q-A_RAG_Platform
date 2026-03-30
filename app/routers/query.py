@@ -14,4 +14,11 @@ async def query_document(question: str, db: AsyncSession = Depends(get_db)):
     retrieved_text = await similarity_search(question, db)
     result = llm_prompt(question, retrieved_text)
 
-    return {"answer": result, "question": question}
+    return {
+        "answer": result,
+        "question": question,
+        "sources": [
+            {"content": chunk.content, "page": chunk.page_num}
+            for chunk in retrieved_text
+        ],
+    }

@@ -1,6 +1,7 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from app.config import settings
 
 
 def format_chunks_into_text(retrievedChunks: list):
@@ -26,7 +27,9 @@ def llm_prompt(question: str, retrievedChunks: list):
         """
     )
 
-    model = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite")
+    model = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash-lite", google_api_key=settings.google_api_key
+    )
 
     chain = prompt | model | StrOutputParser()
 
