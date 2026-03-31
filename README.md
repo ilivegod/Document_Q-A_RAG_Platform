@@ -20,6 +20,10 @@ uvicorn app.main:app --reload
 
 docker ps
 
+# run celery worker
+
+celery -A app.workers.celery_app worker --loglevel=info
+
 # See container logs
 
 docker logs docqa-postgres

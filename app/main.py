@@ -5,16 +5,22 @@ from sqlalchemy import text
 from app.routers.documents import router as documents_router
 from app.routers.query import router as query_router
 from app.routers.auth import router as auth_router
+from app.middleware.error_handler import ErrorHandlerMiddleware
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 app = FastAPI()
 
 app.include_router(documents_router)
 app.include_router(query_router)
 app.include_router(auth_router)
+app.add_middleware(ErrorHandlerMiddleware)
 
 
 @app.get("/health")

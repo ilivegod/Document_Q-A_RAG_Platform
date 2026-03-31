@@ -4,7 +4,6 @@ from fastapi import (
     HTTPException,
     APIRouter,
     Depends,
-    BackgroundTasks,
 )
 from pathlib import Path
 import uuid
@@ -30,7 +29,6 @@ initial_status = Document_Status.UPLOADED
 
 @router.post("/documents/upload")
 async def upload_document(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
