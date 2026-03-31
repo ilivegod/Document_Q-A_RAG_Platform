@@ -24,6 +24,26 @@ docker ps
 
 celery -A app.workers.celery_app worker --loglevel=info
 
+# run docker compose
+
+docker-compose up --build
+
+# starts everything using existing images. Use this most of the time.
+
+docker-compose up
+
+# starts in background (detached)
+
+docker-compose up -d
+
+# restarts without rebuilding.
+
+docker-compose restart
+
+# run tables
+
+docker-compose exec api alembic upgrade head
+
 # See container logs
 
 docker logs docqa-postgres

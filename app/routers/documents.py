@@ -11,6 +11,7 @@ import uuid
 from app.models.document import Document_Status, Document
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.services.pipeline import process_document
 from app.models.user import User
@@ -25,6 +26,19 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 
 router = APIRouter()
 initial_status = Document_Status.UPLOADED
+
+
+@router.get("/documents")
+async def get_documents(
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(
+        select(Document)
+        .where(Document.user_id == current_user.id)
+        .order_by(Document.created_at.desc())
+    )
+    documents = result.scalars().all()
+    return documents
 
 
 @router.post("/documents/upload")

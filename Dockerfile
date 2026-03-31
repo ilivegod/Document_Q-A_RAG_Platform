@@ -4,10 +4,13 @@ WORKDIR /app
 RUN mkdir -p /app/uploads
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
 
 
 COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
 
 
 

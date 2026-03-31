@@ -6,8 +6,10 @@ from app.routers.documents import router as documents_router
 from app.routers.query import router as query_router
 from app.routers.auth import router as auth_router
 from app.middleware.error_handler import ErrorHandlerMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 import logging
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,7 +22,16 @@ app = FastAPI()
 app.include_router(documents_router)
 app.include_router(query_router)
 app.include_router(auth_router)
+
 app.add_middleware(ErrorHandlerMiddleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
