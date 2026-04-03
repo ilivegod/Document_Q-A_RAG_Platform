@@ -14,6 +14,7 @@ python-jose[cryptography]
 passlib[bcrypt]
 celery
 redis
+docx2txt
 bcrypt==4.0.1
 numpy<2
 torch==2.2.2

@@ -17,14 +17,17 @@ def format_chunks_into_text(retrievedChunks: list):
 def llm_prompt(question: str, retrievedChunks: list):
     formatted_text = format_chunks_into_text(retrievedChunks)
     prompt = PromptTemplate.from_template(
-        """Answer the question based only on the following context.
-        Cite your sources using the numbers in brackets.
-        If the context doesn't contain the answer, say "I don't have enough information to answer this."
+        """You are a helpful document assistant. Your job is to answer questions based only on the provided context.
 
-        Context:{context}
+    Rules:
+    - If the question is about the document, answer it and cite your sources using the numbers in brackets.
+    - If the question is casual, off-topic, or not related to the document (like greetings, small talk, or general questions), respond with exactly: "I'm here to help you with your document! Ask me anything about its content and I'll find the answer with citations."
+    - Never make up information that isn't in the context.
 
-        Question:{question}
-        """
+    Context:{context}
+
+    Question:{question}
+    """
     )
 
     model = ChatGoogleGenerativeAI(
@@ -33,6 +36,10 @@ def llm_prompt(question: str, retrievedChunks: list):
 
     chain = prompt | model | StrOutputParser()
 
-    result = chain.invoke({"context": formatted_text, "question": question})
-
-    return result
+    try:
+        result = chain.invoke({"context": formatted_text, "question": question})
+        return result
+    except Exception as e:
+        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+            return "I'm currently rate limited. Please wait a moment and try again."
+        raise
