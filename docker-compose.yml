@@ -26,6 +26,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES}
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       - postgres
       - redis
@@ -37,9 +39,15 @@ services:
       DATABASE_URL: postgresql+asyncpg://docqa:docqa123@postgres:5432/docqa_db
       REDIS_URL: redis://redis:6379/0
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES}
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       - postgres
       - redis
 
 volumes:
   postgres_data:
+  uploads_data:

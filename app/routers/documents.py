@@ -12,6 +12,7 @@ from app.models.document import Document_Status, Document
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy import text
 
 from app.services.pipeline import process_document
 from app.models.user import User
@@ -89,3 +90,32 @@ async def upload_document(
     process_document_task.delay(str(db_record.id))
 
     return {"id": str(db_record.id), "status": db_record.status}
+
+
+@router.delete("/documents/{document_id}")
+async def delete_document(
+    document_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doc = await db.get(Document, uuid.UUID(document_id))
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not Found")
+    if doc.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="not authorized")
+
+    # Delete chunks first (foreign key constraint)
+    await db.execute(
+        text("DELETE FROM chunk WHERE doc_id = :doc_id "), {"doc_id": document_id}
+    )
+
+    # Delete file from disk
+    file_path = Path(doc.file_path)
+    if file_path.exists():
+        file_path.unlink()
+
+    # Delete the document record
+    await db.delete(doc)
+    await db.commit()
+
+    return {"detail": "Document deleted"}

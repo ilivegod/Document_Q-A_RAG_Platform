@@ -24,8 +24,12 @@ async def query_document(
     return {
         "answer": result,
         "question": question,
-        "sources": [
-            {"content": chunk.content, "page": chunk.page_num}
-            for chunk in retrieved_text
-        ],
+        "sources": (
+            [
+                {"content": chunk.content, "page": (chunk.page_num or 0) + 1}
+                for chunk in retrieved_text
+            ]
+            if "don't have enough information" not in result
+            else []
+        ),
     }

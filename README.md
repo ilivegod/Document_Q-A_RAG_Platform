@@ -48,6 +48,10 @@ docker-compose exec api alembic upgrade head
 
 docker logs docqa-postgres
 
+# run alembic migrations
+
+docker-compose exec api alembic upgrade head
+
 # Connect to Postgres directly (useful for debugging)
 
 docker exec -it docqa-postgres psql -U docqa -d docqa_db
