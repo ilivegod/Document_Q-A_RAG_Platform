@@ -9,6 +9,6 @@ class User(Base):
 
     id = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     username = mapped_column(String(50), nullable=False)
-    email = mapped_column(String(50), nullable=False)
+    email = mapped_column(String(254), nullable=False, unique=True, index=True)
     hashed_password = mapped_column(String(255), nullable=False)
-    created_at =mapped_column(DateTime,nullable=False, server_default=func.now())
+    created_at = mapped_column(DateTime, nullable=False, server_default=func.now())

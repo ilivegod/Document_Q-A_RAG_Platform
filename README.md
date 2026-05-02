@@ -218,7 +218,3 @@ docker-compose down -v
 - **Google OAuth** — add social login alongside email/password auth
 
 ---
-
-## License
-
-MIT

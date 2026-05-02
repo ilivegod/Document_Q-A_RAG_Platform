@@ -27,7 +27,11 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES}
     volumes:
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
       - uploads_data:/app/uploads
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - postgres
       - redis
@@ -43,6 +47,9 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES}
     volumes:
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
       - uploads_data:/app/uploads
     depends_on:
       - postgres
