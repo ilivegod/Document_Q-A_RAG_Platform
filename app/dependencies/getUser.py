@@ -70,7 +70,7 @@ async def get_user_from_refresh_token(
     db: AsyncSession,
 ):
     """Validate a refresh token and return the associated user.
-    Note: this is NOT a FastAPI dependency - it's called manually
+    Note: this is NOT a FastAPI dependency — it's called manually
     from the /auth/refresh endpoint with the token from the JSON body."""
     token_data = _decode_token(refresh_token, expected_type="refresh")
     user = await get_user(db, email=token_data.email)
