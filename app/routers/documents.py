@@ -4,6 +4,7 @@ from fastapi import (
     HTTPException,
     APIRouter,
     Depends,
+    Request,
     status,
 )
 from pathlib import Path
@@ -18,6 +19,7 @@ from sqlalchemy import select, text
 from app.models.user import User
 from app.dependencies.getUser import get_current_user
 from app.workers.tasks import process_document_task
+from app.dependencies.rate_limit import limiter, get_user_id_key, UPLOAD_LIMIT
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,7 @@ UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
-CHUNK_SIZE = 1024 * 1024  # 1 MB — read this much per iteration
+CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 
 router = APIRouter()
@@ -46,7 +48,9 @@ async def get_documents(
 
 
 @router.post("/documents/upload")
+@limiter.limit(UPLOAD_LIMIT, key_func=get_user_id_key)
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -61,8 +65,7 @@ async def upload_document(
             status_code=400, detail="Invalid file type. Only PDF/DOCX allowed."
         )
 
-    # Stream file to disk in 1MB chunks, enforcing size limit as we go.
-    # This avoids loading the whole file into memory.
+    # Stream file to disk in 1MB chunks
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_path = UPLOAD_DIR / unique_filename
 
@@ -72,7 +75,6 @@ async def upload_document(
             while chunk := await file.read(CHUNK_SIZE):
                 total_bytes += len(chunk)
                 if total_bytes > MAX_FILE_SIZE:
-                    # Clean up the partial file before bailing
                     f.close()
                     file_path.unlink(missing_ok=True)
                     raise HTTPException(
@@ -81,15 +83,12 @@ async def upload_document(
                     )
                 f.write(chunk)
     except HTTPException:
-        # Re-raise HTTP exceptions (size limit) as-is
         raise
     except Exception as e:
-        # On any other failure, clean up the partial file
         file_path.unlink(missing_ok=True)
         logger.error(f"Failed to save file: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Could not save file: {e}")
 
-    # Reject empty files
     if total_bytes == 0:
         file_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
@@ -129,12 +128,10 @@ async def delete_document(
         {"doc_id": document_id},
     )
 
-    # Delete file from disk
     file_path = Path(doc.file_path)
     if file_path.exists():
         file_path.unlink()
 
-    # Delete the document record
     await db.delete(doc)
     await db.commit()
 

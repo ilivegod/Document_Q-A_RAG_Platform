@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from app.models.user import User
 from app.schemas.auth import UserResponse, UserCreate, Token, RefreshRequest
@@ -15,13 +15,24 @@ from app.utils.register import (
     create_access_token,
     create_refresh_token,
 )
+from app.dependencies.rate_limit import (
+    limiter,
+    LOGIN_LIMIT,
+    REGISTER_LIMIT,
+    REFRESH_LIMIT,
+)
 
 
 router = APIRouter()
 
 
 @router.post("/auth/register", response_model=UserResponse)
-async def register_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
+@limiter.limit(REGISTER_LIMIT)
+async def register_user(
+    request: Request,
+    user: UserCreate,
+    db: AsyncSession = Depends(get_db),
+):
     db_user = await get_user(db, email=user.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -39,12 +50,12 @@ async def register_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/auth/login", response_model=Token)
+@limiter.limit(LOGIN_LIMIT)
 async def login_user(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    # OAuth2PasswordRequestForm uses 'username' as the field name,
-    # but we authenticate by email — so we treat form_data.username as the email.
     user = await authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -62,7 +73,9 @@ async def login_user(
 
 
 @router.post("/auth/refresh", response_model=Token)
+@limiter.limit(REFRESH_LIMIT)
 async def refresh_access_token(
+    request: Request,
     body: RefreshRequest,
     db: AsyncSession = Depends(get_db),
 ):

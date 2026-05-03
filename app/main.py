@@ -3,6 +3,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 import logging
 
 from app.database import get_db
@@ -11,6 +14,7 @@ from app.routers.documents import router as documents_router
 from app.routers.query import router as query_router
 from app.routers.auth import router as auth_router
 from app.middleware.error_handler import ErrorHandlerMiddleware
+from app.dependencies.rate_limit import limiter
 
 
 logging.basicConfig(
@@ -23,6 +27,12 @@ logger = logging.getLogger(__name__)
 
 
 app = FastAPI(title="DocQA API")
+
+# Attach the limiter to app state and register the 429 handler.
+# Both are required for slowapi to function.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(documents_router)
 app.include_router(query_router)

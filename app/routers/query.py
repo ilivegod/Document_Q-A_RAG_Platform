@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.services.retrieval import similarity_search
@@ -6,12 +6,15 @@ from app.services.qa_chain import llm_prompt
 from app.schemas.query import QueryRequest, QueryResponse, Source
 from app.models.user import User
 from app.dependencies.getUser import get_current_user
+from app.dependencies.rate_limit import limiter, get_user_id_key, QUERY_LIMIT
 
 router = APIRouter()
 
 
 @router.post("/documents/query", response_model=QueryResponse)
+@limiter.limit(QUERY_LIMIT, key_func=get_user_id_key)
 async def query_document(
+    request: Request,
     body: QueryRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -24,9 +27,6 @@ async def query_document(
         k=body.k,
     )
 
-    # No chunks found — short-circuit, don't waste an LLM call.
-    # This happens when: user has no docs, or document_id filter
-    # matches a doc that hasn't finished processing yet.
     if not retrieved_chunks:
         return QueryResponse(
             question=body.question,
