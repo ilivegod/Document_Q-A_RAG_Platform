@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     jwt_expiration_minutes: int
     jwt_refresh_expiration_days: int = 7
     redis_url: str
+    cors_origins: str = "http://localhost:3000"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse comma-separated CORS_ORIGINS env var into a list."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @field_validator("jwt_secret")
     @classmethod
