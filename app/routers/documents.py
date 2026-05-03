@@ -4,6 +4,7 @@ from fastapi import (
     HTTPException,
     APIRouter,
     Depends,
+    status,
 )
 from pathlib import Path
 import uuid
@@ -23,7 +24,8 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
-MAX_FILE_SIZE = 50 * 1024 * 1024
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+CHUNK_SIZE = 1024 * 1024  # 1 MB — read this much per iteration
 
 
 router = APIRouter()
@@ -49,32 +51,50 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Validate file type
+    # Validate file extension
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided.")
+
     file_extension = Path(file.filename).suffix.lower()
     if file_extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400, detail="Invalid file type. Only PDF/DOCX allowed."
         )
 
-    # Check file size
-    file_content = await file.read()
-    await file.seek(0)
-    file_size = len(file_content)
-    if file_size > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="File too large.")
-
-    # Save to disk
+    # Stream file to disk in 1MB chunks, enforcing size limit as we go.
+    # This avoids loading the whole file into memory.
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_path = UPLOAD_DIR / unique_filename
 
+    total_bytes = 0
     try:
         with file_path.open("wb") as f:
-            f.write(file_content)
+            while chunk := await file.read(CHUNK_SIZE):
+                total_bytes += len(chunk)
+                if total_bytes > MAX_FILE_SIZE:
+                    # Clean up the partial file before bailing
+                    f.close()
+                    file_path.unlink(missing_ok=True)
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"File too large. Max size is {MAX_FILE_SIZE // (1024 * 1024)} MB.",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        # Re-raise HTTP exceptions (size limit) as-is
+        raise
     except Exception as e:
+        # On any other failure, clean up the partial file
+        file_path.unlink(missing_ok=True)
         logger.error(f"Failed to save file: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Could not save file: {e}")
 
-    # Save to db
+    # Reject empty files
+    if total_bytes == 0:
+        file_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    # Save record to db
     db_record = Document(
         user_id=current_user.id,
         file_name=file.filename,
