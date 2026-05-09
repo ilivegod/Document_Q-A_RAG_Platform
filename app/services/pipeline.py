@@ -80,7 +80,11 @@ async def process_document(document_id: str) -> None:
 
             # Chunking and embedding — transient failures here will be retried
             chunks = text_splitter(1000, 400, uuid.UUID(document_id), parsed_doc)
-            logger.info(f"Document {document_id}: created {len(chunks)} chunks")
+            enriched = sum(1 for c in chunks if c.bboxes is not None)
+            logger.info(
+                f"Document {document_id}: created {len(chunks)} chunks "
+                f"({enriched} with bboxes)"
+            )
 
             chunks_with_embeddings = embed_chunks(chunks)
             logger.info(f"Document {document_id}: embeddings generated")

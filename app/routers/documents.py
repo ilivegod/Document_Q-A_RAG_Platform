@@ -46,6 +46,41 @@ async def get_documents(
     documents = result.scalars().all()
     return documents
 
+@router.get("/documents/{document_id}")
+async def get_document(
+    document_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    doc = await db.get(Document, doc_uuid)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Count chunks for this document. Useful for the frontend to show
+    # "X chunks indexed" or to know how processing is progressing.
+    chunk_count_result = await db.execute(
+        text("SELECT COUNT(*) FROM chunk WHERE doc_id = :doc_id"),
+        {"doc_id": str(doc.id)},
+    )
+    chunk_count = chunk_count_result.scalar_one()
+
+    return {
+        "id": str(doc.id),
+        "user_id": str(doc.user_id),
+        "file_name": doc.file_name,
+        "file_type": doc.file_type,
+        "status": doc.status,
+        "created_at": doc.created_at,
+        "chunk_count": chunk_count,
+    }
+
 
 @router.post("/documents/upload")
 @limiter.limit(UPLOAD_LIMIT, key_func=get_user_id_key)
