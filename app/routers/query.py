@@ -42,16 +42,20 @@ async def query_document(
     llm_answer = llm_prompt(body.question, retrieved_chunks)
 
     sources = (
-        [
-            Source(
-                content=chunk.content,
-                page=(chunk.page_num or 0) + 1,
-            )
-            for chunk in retrieved_chunks
-        ]
-        if llm_answer.has_answer
-        else []
-    )
+    [
+        Source(
+            chunk_id=str(chunk.id),
+            content=chunk.content,
+            page=(chunk.page_num or 0) + 1,
+            bboxes=chunk.bboxes,
+            page_width=chunk.page_width,
+            page_height=chunk.page_height,
+        )
+        for chunk in retrieved_chunks
+    ]
+    if llm_answer.has_answer
+    else []
+    )   
 
     return QueryResponse(
         question=body.question,

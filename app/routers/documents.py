@@ -11,6 +11,9 @@ from pathlib import Path
 import uuid
 import logging
 
+from fastapi.responses import FileResponse
+import os
+
 from app.models.document import Document
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,6 +83,51 @@ async def get_document(
         "created_at": doc.created_at,
         "chunk_count": chunk_count,
     }
+
+@router.get("/documents/{document_id}/file")
+async def serve_document_file(
+    document_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Serve the original document file for in-browser viewing.
+
+    Auth-protected and per-user scoped: a user can only fetch files for
+    their own documents. The frontend's PDF viewer fetches this with the
+    JWT in the Authorization header.
+
+    Returns the file with Cache-Control: private, max-age=3600 so the
+    browser caches per-user but doesn't share across users.
+    """
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    doc = await db.get(Document, doc_uuid)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.user_id != current_user.id:
+        # Same response shape as not-found to avoid leaking existence info
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=404, detail="File missing on server")
+
+    media_type = (
+        "application/pdf" if doc.file_type == ".pdf"
+        else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+
+    return FileResponse(
+        path=doc.file_path,
+        media_type=media_type,
+        filename=doc.file_name,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
 
 
 @router.post("/documents/upload")

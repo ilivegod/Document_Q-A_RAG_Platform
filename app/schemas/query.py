@@ -9,8 +9,12 @@ class QueryRequest(BaseModel):
 
 
 class Source(BaseModel):
+    chunk_id: str
     content: str
     page: int
+    bboxes: list[list[float]] | None = None
+    page_width: int | None = None
+    page_height: int | None = None
 
 
 class QueryResponse(BaseModel):
