@@ -6,6 +6,10 @@ Two key functions are used to identify clients:
 - get_user_id_key: extracts the user ID from the Authorization header.
   Used for authenticated endpoints (upload, query).
 
+For per-email rate limiting (e.g. forgot-password), see the inline check
+in the route handler — slowapi decorators run before the body is parsed,
+so the email isn't available as a key_func at decorator time.
+
 Limits are defined as constants here so adjusting them is one place to look.
 When tiers are activated, the per-tier limits live in TIER_LIMITS below.
 """
@@ -22,6 +26,13 @@ from app.config import settings
 LOGIN_LIMIT = "5/15minute"
 REGISTER_LIMIT = "3/hour"
 REFRESH_LIMIT = "10/minute"
+
+# Password reset:
+# - per-IP limit prevents bulk abuse from a single source
+# - per-email limit prevents bombarding a single user's inbox
+FORGOT_PASSWORD_IP_LIMIT = "10/hour"
+FORGOT_PASSWORD_EMAIL_LIMIT = "3/hour"
+RESET_PASSWORD_LIMIT = "5/hour"
 
 # Authenticated endpoints (keyed by user ID)
 # These currently apply to all users regardless of tier.

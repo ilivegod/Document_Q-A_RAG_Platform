@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     redis_url: str
     cors_origins: str = "http://localhost:3000"
 
+    # Email / Resend
+    resend_api_key: str
+    email_from: str = "onboarding@resend.dev"
+    frontend_url: str = "http://localhost:3000"
+    password_reset_ttl_minutes: int = 30
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse comma-separated CORS_ORIGINS env var into a list."""
