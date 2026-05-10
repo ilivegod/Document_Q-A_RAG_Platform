@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     email_from: str = "onboarding@resend.dev"
     frontend_url: str = "http://localhost:3000"
     password_reset_ttl_minutes: int = 30
+    email_verification_ttl_hours: int = 24
 
     @property
     def cors_origins_list(self) -> list[str]:

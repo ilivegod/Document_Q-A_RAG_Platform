@@ -11,6 +11,7 @@ from app.schemas.auth import (
     RefreshRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    VerifyEmailRequest,
     MessageResponse,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,13 +36,15 @@ from app.dependencies.rate_limit import (
     FORGOT_PASSWORD_IP_LIMIT,
     FORGOT_PASSWORD_EMAIL_LIMIT,
     RESET_PASSWORD_LIMIT,
+    VERIFY_EMAIL_LIMIT,
+    RESEND_VERIFICATION_LIMIT,
 )
 from app.services.token_service import (
     create_token,
     consume_token,
     invalidate_user_tokens,
 )
-from app.services.email import send_password_reset_email
+from app.services.email import send_password_reset_email, send_verification_email
 
 
 router = APIRouter()
@@ -75,6 +78,33 @@ async def register_user(
     )
     db.add(db_user)
     await db.commit()
+    await db.refresh(db_user)
+
+    # Send verification email. Failures here are intentionally swallowed
+    # (logged inside the email service) — we never want a transient Resend
+    # outage to block account creation. Users can use /auth/resend-verification
+    # to retry.
+    try:
+        raw_token = await create_token(
+            db,
+            user_id=db_user.id,
+            token_type=TokenType.EMAIL_VERIFICATION,
+            ttl_minutes=settings.email_verification_ttl_hours * 60,
+        )
+        verify_url = f"{settings.frontend_url}/verify-email?token={raw_token}"
+        await send_verification_email(
+            to=db_user.email,
+            username=db_user.username,
+            verify_url=verify_url,
+        )
+    except Exception:
+        # Token creation could fail if DB hiccups. Don't block registration.
+        # The user can request a resend after login.
+        pass
+
+    # create_token's commit expired db_user's attributes. Refresh so the
+    # response serialization can access them without triggering a lazy
+    # load (which would fail with MissingGreenlet outside the async context).
     await db.refresh(db_user)
     return db_user
 
@@ -209,3 +239,69 @@ async def reset_password(
     )
 
     return MessageResponse(message="Password reset successfully")
+
+
+@router.post("/auth/verify-email", response_model=MessageResponse)
+@limiter.limit(VERIFY_EMAIL_LIMIT)
+async def verify_email(
+    request: Request,
+    body: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Consume an email verification token and mark the user verified.
+
+    Idempotent in spirit: the underlying token is single-use, so calling
+    twice with the same token returns 400 the second time. The frontend
+    treats that case as "already verified, please sign in".
+    """
+    user = await consume_token(
+        db,
+        raw_token=body.token,
+        expected_type=TokenType.EMAIL_VERIFICATION,
+    )
+
+    if not user.email_verified:
+        user.email_verified = True
+        await db.commit()
+
+    return MessageResponse(message="Email verified successfully")
+
+
+@router.post("/auth/resend-verification", response_model=MessageResponse)
+@limiter.limit(RESEND_VERIFICATION_LIMIT)
+async def resend_verification(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reissue an email verification token to the currently-logged-in user.
+
+    Invalidates any pending verification tokens first, so only the newest
+    link works. No-ops (still returns 200) if the user is already verified
+    — avoids confusing the frontend; the banner will disappear on next
+    `/auth/me` refetch anyway.
+    """
+    if current_user.email_verified:
+        return MessageResponse(message="Email is already verified")
+
+    await invalidate_user_tokens(
+        db,
+        user_id=current_user.id,
+        token_type=TokenType.EMAIL_VERIFICATION,
+    )
+
+    raw_token = await create_token(
+        db,
+        user_id=current_user.id,
+        token_type=TokenType.EMAIL_VERIFICATION,
+        ttl_minutes=settings.email_verification_ttl_hours * 60,
+    )
+    verify_url = f"{settings.frontend_url}/verify-email?token={raw_token}"
+
+    await send_verification_email(
+        to=current_user.email,
+        username=current_user.username,
+        verify_url=verify_url,
+    )
+
+    return MessageResponse(message="Verification email sent")

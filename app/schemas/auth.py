@@ -24,6 +24,7 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: UUID
+    email_verified: bool
 
     class Config:
         from_attributes = True
@@ -43,6 +44,7 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -50,11 +52,12 @@ class RefreshRequest(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
-class ResetPasswordRequest(BaseModel):
-    token: str = Field(min_length = 1)
-    new_password: str = Field(min_length = 8, max_length = 72)
 
-    @field_validator("new_passsword")
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("new_password")
     @classmethod
     def password_must_be_within_bcrypt_byte_limit(cls, v: str) -> str:
         if len(v.encode("utf-8")) > 72:
@@ -63,5 +66,10 @@ class ResetPasswordRequest(BaseModel):
             )
         return v
 
+
 class MessageResponse(BaseModel):
     message: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=1)
