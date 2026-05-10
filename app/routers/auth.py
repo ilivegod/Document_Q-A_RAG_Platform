@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from limits import parse as parse_limit
+import logging
 
 from app.models.user import User
 from app.models.auth_token import TokenType
@@ -47,6 +48,9 @@ from app.services.token_service import (
 from app.services.email import send_password_reset_email, send_verification_email
 
 
+logger = logging.getLogger(__name__)
+
+
 router = APIRouter()
 
 
@@ -80,6 +84,15 @@ async def register_user(
     await db.commit()
     await db.refresh(db_user)
 
+    # Capture identity fields BEFORE calling create_token. That call commits,
+    # which expires all attributes on db_user. Reading db_user.email or
+    # .username after the commit triggers a lazy-load and crashes with
+    # MissingGreenlet (no async context to fetch in). Plain strings survive
+    # the commit just fine.
+    user_id = db_user.id
+    user_email = db_user.email
+    user_name = db_user.username
+
     # Send verification email. Failures here are intentionally swallowed
     # (logged inside the email service) — we never want a transient Resend
     # outage to block account creation. Users can use /auth/resend-verification
@@ -87,20 +100,19 @@ async def register_user(
     try:
         raw_token = await create_token(
             db,
-            user_id=db_user.id,
+            user_id=user_id,
             token_type=TokenType.EMAIL_VERIFICATION,
             ttl_minutes=settings.email_verification_ttl_hours * 60,
         )
         verify_url = f"{settings.frontend_url}/verify-email?token={raw_token}"
         await send_verification_email(
-            to=db_user.email,
-            username=db_user.username,
+            to=user_email,
+            username=user_name,
             verify_url=verify_url,
         )
     except Exception:
-        # Token creation could fail if DB hiccups. Don't block registration.
-        # The user can request a resend after login.
-        pass
+        # Log so we don't silently lose track of failures.
+        logger.exception("Failed to send verification email during registration")
 
     # create_token's commit expired db_user's attributes. Refresh so the
     # response serialization can access them without triggering a lazy
@@ -190,17 +202,22 @@ async def forgot_password(
     if user is None:
         return _UNIFORM_FORGOT_RESPONSE
 
+    # Capture identity fields BEFORE create_token's commit expires them.
+    user_id = user.id
+    user_email = user.email
+    user_name = user.username
+
     raw_token = await create_token(
         db,
-        user_id=user.id,
+        user_id=user_id,
         token_type=TokenType.PASSWORD_RESET,
         ttl_minutes=settings.password_reset_ttl_minutes,
     )
     reset_url = f"{settings.frontend_url}/reset-password?token={raw_token}"
 
     await send_password_reset_email(
-        to=user.email,
-        username=user.username,
+        to=user_email,
+        username=user_name,
         reset_url=reset_url,
     )
 
@@ -284,23 +301,29 @@ async def resend_verification(
     if current_user.email_verified:
         return MessageResponse(message="Email is already verified")
 
+    # Capture identity fields BEFORE any commit; otherwise subsequent
+    # attribute access lazy-loads and crashes (MissingGreenlet).
+    user_id = current_user.id
+    user_email = current_user.email
+    user_name = current_user.username
+
     await invalidate_user_tokens(
         db,
-        user_id=current_user.id,
+        user_id=user_id,
         token_type=TokenType.EMAIL_VERIFICATION,
     )
 
     raw_token = await create_token(
         db,
-        user_id=current_user.id,
+        user_id=user_id,
         token_type=TokenType.EMAIL_VERIFICATION,
         ttl_minutes=settings.email_verification_ttl_hours * 60,
     )
     verify_url = f"{settings.frontend_url}/verify-email?token={raw_token}"
 
     await send_verification_email(
-        to=current_user.email,
-        username=current_user.username,
+        to=user_email,
+        username=user_name,
         verify_url=verify_url,
     )
 
