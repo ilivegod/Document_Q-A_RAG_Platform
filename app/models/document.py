@@ -18,7 +18,7 @@ class Document(Base):
 
     id = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     user_id = mapped_column(
-        UUID, ForeignKey("user.id"), nullable=False, index=True
+        UUID, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
     )
     file_name = mapped_column(String(255), nullable=False)
     file_type = mapped_column(String(), nullable=False)
