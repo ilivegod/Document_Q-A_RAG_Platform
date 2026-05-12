@@ -8,6 +8,15 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 import logging
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+from app.sentry import init_sentry
+init_sentry()
+
 from app.database import get_db
 from app.config import settings
 from app.routers.documents import router as documents_router
@@ -17,11 +26,7 @@ from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.dependencies.rate_limit import limiter
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+
 
 logger = logging.getLogger(__name__)
 

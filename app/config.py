@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     password_reset_ttl_minutes: int = 30
     email_verification_ttl_hours: int = 24
 
+    # Sentry. All optional — if sentry_dsn is empty, Sentry init is skipped.
+    sentry_dsn: str = ""
+    sentry_environment: str = "development"
+    sentry_traces_sample_rate: float = 1.0
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse comma-separated CORS_ORIGINS env var into a list."""

@@ -26,3 +26,4 @@ numpy<2
 torch==2.2.2
 transformers==4.44.0
 sentence-transformers==3.0.1
+sentry-sdk[fastapi,celery]
