@@ -39,6 +39,7 @@ RESET_PASSWORD_LIMIT = "5/hour"
 # - resend-verification is per-user (authenticated) to bound inbox spam
 VERIFY_EMAIL_LIMIT = "10/hour"
 RESEND_VERIFICATION_LIMIT = "3/hour"
+DELETE_ACCOUNT_LIMIT = "2/hour"
 
 # Authenticated endpoints (keyed by user ID)
 # These currently apply to all users regardless of tier.

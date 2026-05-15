@@ -39,6 +39,7 @@ from app.dependencies.rate_limit import (
     RESET_PASSWORD_LIMIT,
     VERIFY_EMAIL_LIMIT,
     RESEND_VERIFICATION_LIMIT,
+    DELETE_ACCOUNT_LIMIT
 )
 from app.services.token_service import (
     create_token,
@@ -46,6 +47,12 @@ from app.services.token_service import (
     invalidate_user_tokens,
 )
 from app.services.email import send_password_reset_email, send_verification_email
+
+from sqlalchemy import select
+from pathlib import Path
+import os
+
+from app.models.document import Document
 
 
 logger = logging.getLogger(__name__)
@@ -328,3 +335,58 @@ async def resend_verification(
     )
 
     return MessageResponse(message="Verification email sent")
+
+
+@router.delete("/auth/me", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(DELETE_ACCOUNT_LIMIT)
+async def delete_account(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete the current user's account.
+
+    Cascades:
+      - documents (FK ON DELETE CASCADE) → chunks (FK ON DELETE CASCADE)
+      - auth_tokens (FK ON DELETE CASCADE)
+    Application-level cleanup:
+      - PDF/DOCX files on disk
+
+    Order: collect file paths → delete user (DB cascade fires) → unlink
+    files. If file unlinking partially fails, the DB state is still clean
+    and the leftovers are recoverable garbage. The opposite order (files
+    first) risks orphaned DB rows if the request dies mid-way.
+
+    NOTE: refresh tokens are stateless JWTs and remain valid until expiry.
+    When refresh-token revocation is added, kill all of this user's
+    refresh tokens here too.
+    """
+    user_id = current_user.id
+
+    # Collect file paths BEFORE the delete - once the user is gone the
+    # documents are cascaded away and we can't query them.
+    result = await db.execute(
+        select(Document.file_path).where(Document.user_id == user_id)
+    )
+    file_paths = [row[0] for row in result.all()]
+
+    # Delete the user. Cascade does the rest in one transaction.
+    await db.delete(current_user)
+    await db.commit()
+
+    # Best-effort file cleanup. Failures here are logged but don't affect
+    # the response — the account is already gone.
+    for path_str in file_paths:
+        try:
+            path = Path(path_str)
+            if path.exists():
+                path.unlink()
+        except OSError:
+            logger.exception(
+                "Failed to remove file during account deletion: %s", path_str
+            )
+
+    logger.info("Account deleted: user_id=%s, files_cleaned=%d", user_id, len(file_paths))
+
+    # 204 No Content - no response body needed
+    return None
