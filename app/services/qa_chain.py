@@ -38,8 +38,28 @@ def format_chunks_into_text(retrieved_chunks: list) -> str:
     return "\n\n".join(context_parts)
 
 
-def llm_prompt(question: str, retrieved_chunks: list) -> LLMAnswer:
+def llm_prompt(
+    question: str,
+    retrieved_chunks: list,
+    chat_history: list[dict] | None = None,
+) -> LLMAnswer:
     formatted_text = format_chunks_into_text(retrieved_chunks)
+
+    # Format prior turns for the prompt. Only include assistant messages
+    # where has_answer=True — feeding "I don't know" turns into history
+    # adds noise without helping the model follow the conversation.
+    history_text = ""
+    if chat_history:
+        lines = []
+        for msg in chat_history:
+            role = msg["role"].capitalize()
+            lines.append(f"{role}: {msg['content']}")
+        if lines:
+            history_text = "\n".join(lines)
+
+    history_section = (
+        f"\nPrevious conversation:\n{history_text}\n" if history_text else ""
+    )
 
     prompt = PromptTemplate.from_template(
         """You are a helpful document assistant. Answer questions based only on the provided context.
@@ -49,11 +69,12 @@ Rules:
 - If the context doesn't contain enough information, set has_answer=False and briefly explain you don't have that information.
 - If the question is casual, off-topic, or unrelated to the document, set has_answer=False and politely redirect.
 - Never make up information that isn't in the context.
+- Use the previous conversation to understand follow-up questions and references.
 
 Context:
 {context}
-
-Question: {question}
+{history}
+Current question: {question}
 """
     )
 
@@ -66,9 +87,14 @@ Question: {question}
 
     try:
         result: LLMAnswer = chain.invoke(
-            {"context": formatted_text, "question": question}
+            {
+                "context": formatted_text,
+                "history": history_section,
+                "question": question,
+            }
         )
         return result
+    
     except Exception as e:
         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
             logger.warning("Gemini rate limit hit")

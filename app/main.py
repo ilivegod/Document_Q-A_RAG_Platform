@@ -24,6 +24,7 @@ from app.routers.query import router as query_router
 from app.routers.auth import router as auth_router
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.dependencies.rate_limit import limiter
+from app.routers.conversations import router as conversations_router
 
 
 
@@ -42,6 +43,7 @@ app.add_middleware(SlowAPIMiddleware)
 app.include_router(documents_router)
 app.include_router(query_router)
 app.include_router(auth_router)
+app.include_router(conversations_router)
 
 app.add_middleware(ErrorHandlerMiddleware)
 
