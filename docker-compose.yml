@@ -44,6 +44,8 @@ services:
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
       - uploads_data:/app/uploads
+      - ./tests:/app/tests
+      - ./pytest.ini:/app/pytest.ini
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - postgres
