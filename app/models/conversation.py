@@ -46,7 +46,7 @@ class Message(Base):
         index=True,
     )
     role: Mapped[MessageRole] = mapped_column(
-        SQLEnum(MessageRole, name="messagerole"),
+        SQLEnum(MessageRole, name="messagerole", values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
     content = mapped_column(Text, nullable=False)

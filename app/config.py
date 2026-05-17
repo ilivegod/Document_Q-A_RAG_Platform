@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     sentry_environment: str = "development"
     sentry_traces_sample_rate: float = 1.0
 
+    # Cloudflare R2 object storage.
+    # All optional — if r2_bucket_name is empty, storage falls back to local
+    # disk (dev mode). In production all four must be set.
+    r2_bucket_name: str = ""
+    r2_endpoint_url: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+
     @property
     def is_production(self) -> bool:
         return self.sentry_environment == "production"

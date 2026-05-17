@@ -24,27 +24,25 @@ paragraph. The chunker walks these spans and accumulates them into chunks.
 """
 
 import logging
-import uuid
 import fitz  # PyMuPDF
 from docx import Document as DocxDocument
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.document import Document
+
 
 logger = logging.getLogger(__name__)
 
 
-async def parse_document(document_id: uuid.UUID, db: AsyncSession):
-    doc = await db.get(Document, document_id)
-    if not doc:
-        logger.error(f"parse_document: document {document_id} not found")
-        return None
+def parse_document_from_path(file_path: str, file_type: str):
+    """Parse a document from a local file path.
 
-    if doc.file_type == ".pdf":
-        return _parse_pdf(doc.file_path)
-    elif doc.file_type == ".docx":
-        return _parse_docx(doc.file_path)
+    Called by the pipeline after downloading the file from R2 (or directly
+    in dev mode). Returns the parsed structure or None on failure.
+    """
+    if file_type == ".pdf":
+        return _parse_pdf(file_path)
+    elif file_type == ".docx":
+        return _parse_docx(file_path)
     else:
-        logger.error(f"parse_document: unsupported file type {doc.file_type}")
+        logger.error(f"parse_document_from_path: unsupported file type {file_type}")
         return None
 
 
