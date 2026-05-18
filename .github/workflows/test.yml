@@ -17,6 +17,7 @@ jobs:
           POSTGRES_USER: docqa
           POSTGRES_PASSWORD: docqa123
           POSTGRES_DB: docqa_db
+          REDIS_HOST: localhost
         ports:
           - 5432:5432
         options: >-

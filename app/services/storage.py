@@ -19,7 +19,7 @@ Key design choices:
 """
 import logging
 import tempfile
-from pathlib import Path
+
 
 import aioboto3
 from botocore.config import Config

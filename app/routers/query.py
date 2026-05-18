@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,7 +10,7 @@ from app.database import get_db
 from app.dependencies.getUser import get_current_user
 from app.dependencies.rate_limit import QUERY_LIMIT, get_user_id_key, limiter
 from app.models.conversation import Conversation, Message, MessageRole
-from app.models.document import Document
+
 from app.models.user import User
 from app.schemas.query import QueryRequest, QueryResponse, Source
 from app.services.qa_chain import llm_prompt

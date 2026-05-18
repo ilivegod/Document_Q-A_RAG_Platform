@@ -7,12 +7,12 @@ from fastapi import (
     Request,
     status,
 )
-from fastapi.responses import RedirectResponse
+
 from pathlib import Path
 import uuid
 import logging
 import os
-import tempfile
+
 
 from app.models.document import Document
 from app.database import get_db

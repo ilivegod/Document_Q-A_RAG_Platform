@@ -50,7 +50,7 @@ from app.services.email import send_password_reset_email, send_verification_emai
 
 from sqlalchemy import select
 from pathlib import Path
-import os
+
 
 from app.models.document import Document
 

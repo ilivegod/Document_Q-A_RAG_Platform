@@ -65,7 +65,7 @@ async def test_register_duplicate_email(client: AsyncClient):
 
     r = await client.post("/auth/register", json=payload)
     assert r.status_code == 200
-    user_id = r.json()["id"]
+
 
     r2 = await client.post("/auth/register", json=payload)
     assert r2.status_code == 400
@@ -83,7 +83,6 @@ async def test_register_duplicate_email(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_login_wrong_password(client: AsyncClient):
-    """Wrong password returns 401."""
     unique = uuid.uuid4().hex[:8]
     email = f"wp_{unique}@example.com"
 

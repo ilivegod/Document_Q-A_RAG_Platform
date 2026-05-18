@@ -1,5 +1,5 @@
 from sqlalchemy.orm import mapped_column, Mapped
-from sqlalchemy import String, DateTime, Text, Boolean, ForeignKey, func, Enum as SQLEnum
+from sqlalchemy import DateTime, Text, Boolean, ForeignKey, func, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.database import Base
 from enum import Enum

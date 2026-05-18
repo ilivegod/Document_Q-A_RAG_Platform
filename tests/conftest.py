@@ -5,8 +5,12 @@ import pytest
 import redis as _redis
 from httpx import AsyncClient
 
+import os
+_redis_host = os.getenv("REDIS_HOST", "redis")
+_redis_client = _redis.Redis(host=_redis_host, port=6379, db=0)
+
 BASE_URL = "http://localhost:8000"
-_redis_client = _redis.Redis(host="redis", port=6379, db=0)
+
 
 
 @pytest.fixture(scope="session", autouse=True)
