@@ -17,7 +17,7 @@ jobs:
           POSTGRES_USER: docqa
           POSTGRES_PASSWORD: docqa123
           POSTGRES_DB: docqa_db
-          REDIS_HOST: localhost
+          
         ports:
           - 5432:5432
         options: >-
@@ -40,6 +40,7 @@ jobs:
       TESTING: "true"
       DATABASE_URL: postgresql+asyncpg://docqa:docqa123@localhost:5432/docqa_db
       REDIS_URL: redis://localhost:6379/0
+      REDIS_HOST: localhost
       JWT_SECRET: ci-test-secret-key-that-is-long-enough-32chars
       JWT_ALGORITHM: HS256
       JWT_EXPIRATION_MINUTES: 30
