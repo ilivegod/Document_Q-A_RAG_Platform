@@ -1,36 +1,42 @@
-"""Shared test fixtures.
-
-Tests run against the real running stack (api + postgres + redis).
-Run with: docker compose exec api python -m pytest tests/ -v
-
-Rate limits are flushed before each test to prevent inter-test interference.
-"""
+"""Shared test fixtures."""
+import time
+import httpx
 import pytest
 import redis as _redis
 from httpx import AsyncClient
 
 BASE_URL = "http://localhost:8000"
+_redis_client = _redis.Redis(host="redis", port=6379, db=0)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def wait_for_server():
+    """Wait for the API server to be ready."""
+    for _ in range(20):
+        try:
+            r = httpx.get(f"{BASE_URL}/health/live", timeout=2)
+            if r.status_code == 200:
+                return
+        except Exception:
+            pass
+        time.sleep(1)
+    raise RuntimeError("API server did not start in time")
 
 
 @pytest.fixture(autouse=True)
 def flush_rate_limits():
-    """Flush Redis before each test so rate limiters don't interfere."""
-    try:
-        _redis.Redis(host="redis", port=6379, db=0).flushdb()
-    except Exception:
-        pass
+    """Flush Redis before each test."""
+    _redis_client.flushdb()
 
 
 @pytest.fixture
 async def client() -> AsyncClient:
-    """Unauthenticated HTTP client pointing at the running API."""
     async with AsyncClient(base_url=BASE_URL) as c:
         yield c
 
 
 @pytest.fixture
 async def auth_client(client: AsyncClient):
-    """Authenticated client — registers + logs in a fresh user per test."""
     import uuid
     unique = uuid.uuid4().hex[:8]
     email = f"test_{unique}@example.com"

@@ -106,8 +106,10 @@ def get_user_id_key(request: Request) -> str:
 # storage_uri uses Redis so counters persist across processes and restarts.
 # Without this, in-memory storage would mean each worker has its own counts
 # and limits could be bypassed by hitting different workers.
+
+
 limiter = Limiter(
-    key_func=get_remote_address,  # Default key func; overridden per-route via key_func= when needed
+    key_func=get_remote_address,
     storage_uri=settings.redis_url,
-    strategy="fixed-window",  # Simple, predictable. Alternatives: moving-window, sliding-window.
+    strategy="fixed-window",
 )
