@@ -1,0 +1,90 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: docqa
+          POSTGRES_PASSWORD: docqa123
+          POSTGRES_DB: docqa_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://docqa:docqa123@localhost:5432/docqa_db
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-test-secret-key-that-is-long-enough-32chars
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRATION_MINUTES: 30
+      GOOGLE_API_KEY: test-key
+      RESEND_API_KEY: test-key
+      EMAIL_FROM: test@test.com
+      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000
+      SENTRY_DSN: ""
+      R2_BUCKET_NAME: ""
+      R2_ENDPOINT_URL: ""
+      R2_ACCESS_KEY_ID: ""
+      R2_SECRET_ACCESS_KEY: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-all-MiniLM-L6-v2
+
+      - name: Install torch (CPU-only, fast)
+        run: |
+          pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Alembic migrations
+        run: alembic upgrade head
+
+      - name: Start API server in background
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          # Wait for the server to be ready
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:8000/health/live && break
+            sleep 2
+          done
+
+      - name: Run tests
+        run: python -m pytest tests/ -v --tb=short
