@@ -1,0 +1,7 @@
+[
+  {
+    "question": "REPLACE: question about your sample document",
+    "relevant_chunk_ids": ["REPLACE-with-chunk-uuid-after-upload"],
+    "document_id": "REPLACE-with-document-uuid"
+  }
+]

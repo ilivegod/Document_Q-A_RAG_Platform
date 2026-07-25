@@ -31,9 +31,6 @@ async def _send(to: str, subject: str, html: str, text: str) -> None:
         result = await asyncio.to_thread(_send_sync, to, subject, html, text)
         logger.info("Sent email to %s (id=%s)", to, result.get("id"))
     except Exception:
-        # Log but don't raise — we never want email failures to leak account
-        # existence to the caller (forgot-password returns uniform response
-        # regardless). The caller decides whether to surface anything.
         logger.exception("Failed to send email to %s", to)
 
 
@@ -74,6 +71,54 @@ async def send_verification_email(to: str, username: str, verify_url: str) -> No
   <p>Welcome to DocQA. Please verify your email address:</p>
   <p><a href="{verify_url}" style="display: inline-block; padding: 10px 16px; background: #111; color: #fff; text-decoration: none; border-radius: 6px;">Verify email</a></p>
   <p style="color: #666; font-size: 14px;">Or copy this link: <br><a href="{verify_url}">{verify_url}</a></p>
+  <p style="color: #999; font-size: 12px;">— DocQA</p>
+</body></html>"""
+    await _send(to, subject, html, text)
+
+
+async def send_admin_signup_email(
+    admin_to: str,
+    user_email: str,
+    username: str,
+    approve_url: str,
+) -> None:
+    subject = f"DocQA: Approve signup for {user_email}"
+    text = (
+        f"A new user requested access to DocQA.\n\n"
+        f"Username: {username}\n"
+        f"Email: {user_email}\n\n"
+        f"Approve this account:\n{approve_url}\n\n"
+        f"This link expires in {settings.admin_approval_ttl_days} days.\n\n"
+        "— DocQA"
+    )
+    html = f"""<!DOCTYPE html>
+<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.5; color: #222;">
+  <p>A new user requested access to <strong>DocQA</strong>.</p>
+  <ul>
+    <li><strong>Username:</strong> {username}</li>
+    <li><strong>Email:</strong> {user_email}</li>
+  </ul>
+  <p><a href="{approve_url}" style="display: inline-block; padding: 10px 16px; background: #111; color: #fff; text-decoration: none; border-radius: 6px;">Approve account</a></p>
+  <p style="color: #666; font-size: 14px;">Or copy this link:<br><a href="{approve_url}">{approve_url}</a></p>
+  <p style="color: #666; font-size: 14px;">Expires in {settings.admin_approval_ttl_days} days.</p>
+  <p style="color: #999; font-size: 12px;">— DocQA</p>
+</body></html>"""
+    await _send(admin_to, subject, html, text)
+
+
+async def send_account_approved_email(to: str, username: str, login_url: str) -> None:
+    subject = "Your DocQA account has been approved"
+    text = (
+        f"Hi {username},\n\n"
+        "Your DocQA account has been approved. You can now sign in:\n\n"
+        f"{login_url}\n\n"
+        "— DocQA"
+    )
+    html = f"""<!DOCTYPE html>
+<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.5; color: #222;">
+  <p>Hi {username},</p>
+  <p>Your DocQA account has been <strong>approved</strong>. You can now sign in and use the app.</p>
+  <p><a href="{login_url}" style="display: inline-block; padding: 10px 16px; background: #111; color: #fff; text-decoration: none; border-radius: 6px;">Sign in</a></p>
   <p style="color: #999; font-size: 12px;">— DocQA</p>
 </body></html>"""
     await _send(to, subject, html, text)

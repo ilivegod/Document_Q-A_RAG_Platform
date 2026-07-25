@@ -7,7 +7,8 @@ from typing import Any
 class ConversationResponse(BaseModel):
     id: UUID
     user_id: UUID
-    document_id: UUID
+    document_id: UUID | None = None
+    project_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -21,6 +22,7 @@ class MessageResponse(BaseModel):
     content: str
     sources: list[Any] | None = None
     has_answer: bool | None = None
+    agent_trace: list[Any] | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

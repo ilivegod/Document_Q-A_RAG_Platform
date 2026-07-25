@@ -24,7 +24,13 @@ class Conversation(Base):
     document_id = mapped_column(
         UUID,
         ForeignKey("documents.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+        index=True,
+    )
+    project_id = mapped_column(
+        UUID,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
     created_at = mapped_column(
@@ -55,6 +61,7 @@ class Message(Base):
     # even if the underlying document or chunks are later deleted.
     sources = mapped_column(JSONB, nullable=True)
     has_answer = mapped_column(Boolean, nullable=True)
+    agent_trace = mapped_column(JSONB, nullable=True)
     created_at = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

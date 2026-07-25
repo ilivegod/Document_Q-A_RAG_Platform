@@ -9,6 +9,8 @@ from app.database import Base
 from app.models import user
 from app.models.chunk import Chunk
 from app.models.document import Document
+from app.models.project import Project
+from app.models.conversation import Conversation, Message
 
 from app.config import settings
 import asyncio

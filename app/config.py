@@ -33,6 +33,35 @@ class Settings(BaseSettings):
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""
 
+    # Stripe (optional — billing disabled when empty)
+    stripe_secret_key: str = ""
+    stripe_price_id_pro: str = ""
+    stripe_webhook_secret: str = ""
+
+    # Closed beta: manual admin approval before login; all agent tools unlocked
+    closed_beta_enabled: bool = True
+    admin_email: str = ""
+    admin_approval_ttl_days: int = 7
+    api_public_url: str = "http://localhost:8000"
+
+    # MCP web research (DuckDuckGo + Wikipedia stdio servers)
+    mcp_web_enabled: bool = True
+    mcp_ddg_command: str = "python"
+    mcp_ddg_args: str = "-m,duckduckgo_mcp.server"
+    mcp_wiki_command: str = "wiki-mcp"
+    mcp_wiki_args: str = ""
+    mcp_tool_timeout_seconds: int = 45
+    web_research_max_results: int = 5
+    web_research_limit: str = "10/day"
+
+    @property
+    def mcp_ddg_args_list(self) -> list[str]:
+        return [a.strip() for a in self.mcp_ddg_args.split(",") if a.strip()]
+
+    @property
+    def mcp_wiki_args_list(self) -> list[str]:
+        return [a.strip() for a in self.mcp_wiki_args.split(",") if a.strip()]
+
     @property
     def is_production(self) -> bool:
         return self.sentry_environment == "production"

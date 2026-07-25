@@ -25,6 +25,9 @@ from app.routers.auth import router as auth_router
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.dependencies.rate_limit import limiter
 from app.routers.conversations import router as conversations_router
+from app.routers.agent import router as agent_router
+from app.routers.billing import router as billing_router
+from app.routers.projects import router as projects_router
 
 
 
@@ -44,6 +47,9 @@ app.include_router(documents_router)
 app.include_router(query_router)
 app.include_router(auth_router)
 app.include_router(conversations_router)
+app.include_router(agent_router)
+app.include_router(billing_router)
+app.include_router(projects_router)
 
 app.add_middleware(ErrorHandlerMiddleware)
 

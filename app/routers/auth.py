@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from limits import parse as parse_limit
 import logging
@@ -46,7 +47,13 @@ from app.services.token_service import (
     consume_token,
     invalidate_user_tokens,
 )
-from app.services.email import send_password_reset_email, send_verification_email
+from app.dependencies.auth_guards import require_approved_user
+from app.services.email import (
+    send_password_reset_email,
+    send_verification_email,
+    send_admin_signup_email,
+    send_account_approved_email,
+)
 
 from sqlalchemy import select
 from pathlib import Path
@@ -86,6 +93,7 @@ async def register_user(
         username=user.username,
         email=user.email,
         hashed_password=hashed_password,
+        is_approved=not settings.closed_beta_enabled,
     )
     db.add(db_user)
     await db.commit()
@@ -121,6 +129,28 @@ async def register_user(
         # Log so we don't silently lose track of failures.
         logger.exception("Failed to send verification email during registration")
 
+    # Closed beta: notify admin to approve before the user can log in.
+    if settings.closed_beta_enabled and settings.admin_email:
+        try:
+            approval_token = await create_token(
+                db,
+                user_id=user_id,
+                token_type=TokenType.ADMIN_APPROVAL,
+                ttl_minutes=settings.admin_approval_ttl_days * 24 * 60,
+            )
+            approve_url = (
+                f"{settings.api_public_url.rstrip('/')}"
+                f"/auth/admin/approve?token={approval_token}"
+            )
+            await send_admin_signup_email(
+                admin_to=settings.admin_email,
+                user_email=user_email,
+                username=user_name,
+                approve_url=approve_url,
+            )
+        except Exception:
+            logger.exception("Failed to send admin approval email during registration")
+
     # create_token's commit expired db_user's attributes. Refresh so the
     # response serialization can access them without triggering a lazy
     # load (which would fail with MissingGreenlet outside the async context).
@@ -142,6 +172,7 @@ async def login_user(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    require_approved_user(user)
     access_token = create_access_token(data={"sub": user.email})
     refresh_token = create_refresh_token(data={"sub": user.email})
     return {
@@ -159,6 +190,7 @@ async def refresh_access_token(
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_user_from_refresh_token(body.refresh_token, db)
+    require_approved_user(user)
     access_token = create_access_token(data={"sub": user.email})
     refresh_token = create_refresh_token(data={"sub": user.email})
     return {
@@ -171,6 +203,48 @@ async def refresh_access_token(
 @router.get("/auth/me", response_model=UserResponse)
 async def read_current_user(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.get("/auth/admin/approve")
+async def admin_approve_user(
+    token: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+):
+    """One-click approval from admin email. No auth required; token is the secret."""
+    user = await consume_token(
+        db,
+        raw_token=token,
+        expected_type=TokenType.ADMIN_APPROVAL,
+    )
+
+    user_email = user.email
+    user_name = user.username
+
+    if not user.is_approved:
+        user.is_approved = True
+        await db.commit()
+
+    login_url = f"{settings.frontend_url.rstrip('/')}/login?approved=1"
+    try:
+        await send_account_approved_email(
+            to=user_email,
+            username=user_name,
+            login_url=login_url,
+        )
+    except Exception:
+        logger.exception("Failed to send account-approved email to %s", user_email)
+
+    return RedirectResponse(url=login_url, status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/auth/admin/approve/success", response_class=HTMLResponse)
+async def admin_approve_success():
+    return HTMLResponse(
+        "<html><body style='font-family:sans-serif;padding:2rem'>"
+        "<h1>User approved</h1>"
+        "<p>They have been notified by email and can sign in now.</p>"
+        "</body></html>"
+    )
 
 
 @router.post("/auth/forgot-password", response_model=MessageResponse)

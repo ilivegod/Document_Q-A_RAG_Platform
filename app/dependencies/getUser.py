@@ -8,6 +8,7 @@ from app.schemas.auth import TokenData
 from jose import JWTError, jwt
 from fastapi.security import OAuth2PasswordBearer
 from app.config import settings
+from app.dependencies.auth_guards import require_approved_user
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -62,6 +63,7 @@ async def get_current_user(
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    require_approved_user(user)
     return user
 
 

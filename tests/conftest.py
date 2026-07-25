@@ -11,11 +11,27 @@ _redis_client = _redis.Redis(host=_redis_host, port=6379, db=0)
 
 BASE_URL = "http://localhost:8000"
 
+_INTEGRATION_TEST_FILES = {
+    "test_auth.py",
+    "test_health.py",
+    "test_documents.py",
+    "test_closed_beta.py",
+    "test_projects.py",
+}
+
+
+def _needs_live_server(session) -> bool:
+    return any(
+        any(name in item.nodeid for name in _INTEGRATION_TEST_FILES)
+        for item in session.items
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)
-def wait_for_server():
-    """Wait for the API server to be ready."""
+def wait_for_server(request):
+    """Wait for the API server when running integration tests."""
+    if not _needs_live_server(request.session):
+        return
     for _ in range(20):
         try:
             r = httpx.get(f"{BASE_URL}/health/live", timeout=2)
@@ -28,9 +44,14 @@ def wait_for_server():
 
 
 @pytest.fixture(autouse=True)
-def flush_rate_limits():
-    """Flush Redis before each test."""
-    _redis_client.flushdb()
+def flush_rate_limits(request):
+    """Flush Redis before each integration test."""
+    if not _needs_live_server(request.session):
+        return
+    try:
+        _redis_client.flushdb()
+    except Exception:
+        pass
 
 
 @pytest.fixture

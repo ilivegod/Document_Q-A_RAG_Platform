@@ -17,6 +17,7 @@ import uuid
 class TokenType(str, Enum):
     PASSWORD_RESET = "password_reset"
     EMAIL_VERIFICATION = "email_verification"
+    ADMIN_APPROVAL = "admin_approval"
 
 
 class AuthToken(Base):

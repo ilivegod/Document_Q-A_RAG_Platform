@@ -19,6 +19,7 @@ from slowapi.util import get_remote_address
 from jose import jwt, JWTError
 
 from app.config import settings
+from app.models.user import UserTier
 
 
 # --- Rate limit constants ---
@@ -41,15 +42,6 @@ VERIFY_EMAIL_LIMIT = "10/hour"
 RESEND_VERIFICATION_LIMIT = "3/hour"
 DELETE_ACCOUNT_LIMIT = "2/hour"
 
-# Authenticated endpoints (keyed by user ID)
-# These currently apply to all users regardless of tier.
-# When tier-based limits are activated, lookup TIER_LIMITS[user.tier] instead.
-UPLOAD_LIMIT = "5/hour"
-QUERY_LIMIT = "50/day"
-
-
-# Future: tier-aware limits.
-# Wired in when paid tiers are activated.
 TIER_LIMITS = {
     "free": {
         "upload": "5/hour",
@@ -64,6 +56,21 @@ TIER_LIMITS = {
         "query": "5000/day",
     },
 }
+
+# Authenticated endpoints (keyed by user ID) — defaults for FREE tier.
+UPLOAD_LIMIT = TIER_LIMITS["free"]["upload"]
+QUERY_LIMIT = TIER_LIMITS["free"]["query"]
+WEB_RESEARCH_LIMIT = "10/day"
+
+
+def get_upload_limit_for_tier(tier: UserTier | str) -> str:
+    key = tier.value if isinstance(tier, UserTier) else str(tier).lower()
+    return TIER_LIMITS.get(key, TIER_LIMITS["free"])["upload"]
+
+
+def get_query_limit_for_tier(tier: UserTier | str) -> str:
+    key = tier.value if isinstance(tier, UserTier) else str(tier).lower()
+    return TIER_LIMITS.get(key, TIER_LIMITS["free"])["query"]
 
 
 def get_user_id_key(request: Request) -> str:

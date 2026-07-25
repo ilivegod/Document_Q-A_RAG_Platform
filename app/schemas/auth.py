@@ -25,6 +25,8 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     id: UUID
     email_verified: bool
+    is_approved: bool = True
+    tier: str = "free"
 
     model_config = ConfigDict(from_attributes=True)
 

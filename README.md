@@ -208,13 +208,42 @@ docker-compose down -v
 
 ---
 
+## Document agent (MCP-inspired tools)
+
+`POST /documents/agent/query` runs a tool-using agent (Gemini + LangChain) with:
+
+| Tool | Tier | Description |
+|------|------|-------------|
+| `search_documents` | Free | pgvector semantic search |
+| `list_user_documents` | Free | List uploaded docs |
+| `keyword_search` | Pro | Hybrid FTS + vector (`content_tsv`) |
+| `get_page_content` | Pro | Full page text by page number |
+| `generate_flashcards` | Pro | JSON flashcards from context |
+| `generate_quiz` | Pro | MCQ quiz from context |
+
+Set `"stream": true` for SSE (`tool_step`, `token`, `done` events). Agent traces are stored on assistant messages (`agent_trace` JSONB).
+
+Cross-document chat: `document_id` omitted + global conversation (`document_id IS NULL`).
+
+## Retrieval evaluation
+
+```bash
+python -m eval.run_eval --user-id <uuid> --dataset eval/dataset.json
+python -m eval.run_eval --user-id <uuid> --hybrid --output eval/results_hybrid.json
+```
+
+Fill `eval/dataset.json` with questions and relevant chunk UUIDs after uploading a test PDF.
+
+## Deployment
+
+- API: `fly.toml` — `fly deploy` from this directory
+- Set production secrets: `DATABASE_URL`, `REDIS_URL`, `GOOGLE_API_KEY`, `JWT_SECRET`, `CORS_ORIGINS`, optional Stripe keys
+
 ## What I'd Do Next
 
-- **Evaluation metrics** — build a test set and measure retrieval hit rate and MRR to quantify chunking/embedding quality
-- **Hybrid search** — combine vector similarity with keyword search (pg_trgm or tsvector) for better recall
-- **Streaming responses** — stream LLM output token-by-token via SSE for better UX
-- **Multiple LLM providers** — let users choose between Gemini, OpenAI, or local models via Ollama
-- **TXT and web link ingestion** — extend the parser to handle plain text files and scrape web pages
-- **Google OAuth** — add social login alongside email/password auth
+- **Multiple LLM providers** — OpenAI / Ollama via configurable provider
+- **TXT and web link ingestion** — extend parsers
+- **Google OAuth** — social login
+- **Cross-encoder reranking** — rerank top-20 before final top-5
 
 ---

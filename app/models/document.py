@@ -20,6 +20,12 @@ class Document(Base):
     user_id = mapped_column(
         UUID, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    project_id = mapped_column(
+        UUID,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     file_name = mapped_column(String(255), nullable=False)
     file_type = mapped_column(String(), nullable=False)
     file_path = mapped_column(String(), nullable=False)

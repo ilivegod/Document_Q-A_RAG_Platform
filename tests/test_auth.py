@@ -26,6 +26,7 @@ async def test_register_login_me(client: AsyncClient):
     data = r.json()
     assert data["email"] == email
     assert data["email_verified"] is False
+    assert data["is_approved"] is True  # CI runs with CLOSED_BETA_ENABLED=false
     assert "hashed_password" not in data
 
     # Login

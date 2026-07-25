@@ -7,6 +7,7 @@ from .chunking import text_splitter
 from .embedding import embed_chunks
 from app.config import settings
 from app.services.storage import download_to_tempfile
+from app.services.retrieval import backfill_chunk_tsvector
 import logging
 
 logger = logging.getLogger(__name__)
@@ -115,7 +116,8 @@ async def process_document(document_id: str) -> None:
             logger.info(f"Document {document_id}: embeddings generated")
 
             db.add_all(chunks_with_embeddings)
-            await db.commit()
+            await db.flush()
+            await backfill_chunk_tsvector(db, uuid.UUID(document_id))
 
             doc.status = Document_Status.READY
             await db.commit()

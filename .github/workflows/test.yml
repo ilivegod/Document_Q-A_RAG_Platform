@@ -54,6 +54,7 @@ jobs:
       R2_ENDPOINT_URL: ""
       R2_ACCESS_KEY_ID: ""
       R2_SECRET_ACCESS_KEY: ""
+      CLOSED_BETA_ENABLED: "false"
 
     steps:
       - uses: actions/checkout@v4
