@@ -1,5 +1,4 @@
 """Requirements and baseline API tests."""
-import io
 import uuid
 
 import pytest

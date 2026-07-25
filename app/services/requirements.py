@@ -8,7 +8,6 @@ from app.models.requirement import (
     Requirement,
     RequirementCategory,
     RequirementPriority,
-    RequirementStatus,
 )
 from app.schemas.requirement import RequirementResponse, SourceRef
 

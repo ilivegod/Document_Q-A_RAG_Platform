@@ -23,7 +23,6 @@ from app.models.user import UserTier
 from app.services.retrieval import (
     get_page_content,
     hybrid_search,
-    keyword_search,
     similarity_search,
 )
 from langchain_google_genai import ChatGoogleGenerativeAI

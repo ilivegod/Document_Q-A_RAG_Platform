@@ -16,7 +16,7 @@ from app.models.change_request import (
     ChangeRequestStatus,
     ImpactVerdict,
 )
-from app.models.requirement_baseline import BaselineStatus, RequirementBaseline
+from app.models.requirement_baseline import RequirementBaseline
 from app.schemas.change_request import ChangeImpactAnalysisBody, ChangeRequestResponse
 from app.services.project_access import get_project_or_404
 from app.services.qa_chain import format_chunks_into_text

@@ -2,7 +2,6 @@ import json
 
 from app.agent.study_output import (
     detect_study_intent,
-    format_flashcards_answer,
     format_quiz_answer,
     public_agent_trace,
     resolve_follow_up_question,

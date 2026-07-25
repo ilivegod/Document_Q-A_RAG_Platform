@@ -2,6 +2,7 @@
 select = ["E", "F"]
 ignore = [
     "E402",  # Module level import not at top — intentional for Sentry init
+    "E501",  # Long lines in prompts, email HTML, and tool descriptions
 ]
 
 [lint.per-file-ignores]
