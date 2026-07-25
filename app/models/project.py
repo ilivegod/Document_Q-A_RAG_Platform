@@ -20,6 +20,12 @@ class ProjectStatus(str, Enum):
     ARCHIVED = "archived"
 
 
+class ProjectAnalysisStatus(str, Enum):
+    IDLE = "idle"
+    RUNNING = "running"
+    COMPLETE = "complete"
+
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -48,6 +54,24 @@ class Project(Base):
         default=ProjectStatus.ACTIVE,
         nullable=False,
     )
+    analysis_status: Mapped[ProjectAnalysisStatus] = mapped_column(
+        SQLEnum(
+            ProjectAnalysisStatus,
+            name="projectanalysisstatus",
+            values_callable=_ENUM_VALUES,
+        ),
+        default=ProjectAnalysisStatus.IDLE,
+        nullable=False,
+    )
+    requirements_extracted: Mapped[bool] = mapped_column(
+        default=False,
+        nullable=False,
+    )
+    technology_suggested: Mapped[bool] = mapped_column(
+        default=False,
+        nullable=False,
+    )
+    last_analyzed_at = mapped_column(DateTime(timezone=True), nullable=True)
     created_at = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

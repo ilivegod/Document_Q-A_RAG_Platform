@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.project import ProjectStatus, ProjectType
+from app.models.project import ProjectStatus, ProjectType, ProjectAnalysisStatus
 
 
 class ProjectCreate(BaseModel):
@@ -32,5 +32,15 @@ class ProjectResponse(BaseModel):
     document_count: int = 0
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectAnalysisStatusResponse(BaseModel):
+    analysis_status: ProjectAnalysisStatus
+    requirements_extracted: bool
+    technology_suggested: bool
+    analyzing: bool
+    last_analyzed_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)

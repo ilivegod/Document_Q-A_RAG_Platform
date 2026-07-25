@@ -58,6 +58,8 @@ async def process_document(document_id: str) -> None:
     engine = create_async_engine(settings.database_url)
     session_factory = async_sessionmaker(engine)
     temp_path: str | None = None
+    project_id: uuid.UUID | None = None
+    user_id: uuid.UUID | None = None
 
     try:
         async with session_factory() as db:
@@ -123,6 +125,9 @@ async def process_document(document_id: str) -> None:
             await db.commit()
             logger.info(f"Document {document_id}: status set to READY")
 
+            project_id = doc.project_id
+            user_id = doc.user_id
+
     except PermanentProcessingError:
         await _mark_failed(document_id)
     except Exception:
@@ -140,3 +145,12 @@ async def process_document(document_id: str) -> None:
             except OSError:
                 logger.warning("Could not delete temp file: %s", temp_path)
         await engine.dispose()
+
+    if project_id is not None:
+        from app.workers.tasks import auto_analyze_project_task
+
+        auto_analyze_project_task.delay(
+            str(document_id),
+            str(project_id),
+            str(user_id),
+        )

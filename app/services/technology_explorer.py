@@ -45,6 +45,13 @@ class LLMTechnologyResult(BaseModel):
     source_citation_indexes: list[int] = Field(default_factory=list)
 
 
+class LLMTopicSuggestions(BaseModel):
+    topics: list[str] = Field(
+        description="2-3 concise technology decision questions for this project",
+        max_length=3,
+    )
+
+
 def _chunk_to_source(chunk) -> dict[str, Any]:
     return {
         "document_id": str(chunk.doc_id),
@@ -243,3 +250,86 @@ async def list_technology_explorations(
         .order_by(TechnologyExploration.created_at.desc())
     )
     return [exploration_to_response(row) for row in result.scalars().all()]
+
+
+async def suggest_initial_exploration_topics(
+    db: AsyncSession,
+    user_id: UUID,
+    project_id: UUID,
+) -> list[str]:
+    """Derive 2-3 technology exploration topics from project requirements."""
+    await get_project_or_404(project_id, user_id, db)
+
+    requirements, open_questions = await list_working_requirements(db, project_id)
+    if not requirements and not open_questions:
+        return [
+            "What technology stack best fits the goals described in the project documents?"
+        ]
+
+    requirements_text = _format_requirements(requirements)
+    if open_questions:
+        questions_text = "\n".join(
+            f"- {q.stable_id}: {q.title}" for q in open_questions
+        )
+        requirements_text += f"\n\nOpen questions:\n{questions_text}"
+
+    prompt = PromptTemplate.from_template(
+        """Given these project requirements, suggest 2-3 specific technology
+decisions the builder should explore (e.g. database choice, auth provider,
+hosting, frontend framework).
+
+Each topic must be a short question suitable for a stack comparison.
+Focus on decisions implied by the requirements — not generic advice.
+
+Requirements:
+{requirements}
+"""
+    )
+
+    model = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash-lite",
+        google_api_key=settings.google_api_key,
+    ).with_structured_output(LLMTopicSuggestions)
+
+    try:
+        result: LLMTopicSuggestions = (prompt | model).invoke(
+            {"requirements": requirements_text}
+        )
+    except Exception as e:
+        logger.error("Topic suggestion failed: %s", e, exc_info=True)
+        return [
+            "What technology stack best fits the goals described in the project documents?"
+        ]
+
+    topics = [t.strip() for t in result.topics if t and t.strip()]
+    return topics[:3] if topics else [
+        "What technology stack best fits the goals described in the project documents?"
+    ]
+
+
+async def suggest_initial_explorations(
+    db: AsyncSession,
+    user_id: UUID,
+    project_id: UUID,
+) -> list[TechnologyExplorationResponse]:
+    """Run technology explorations for LLM-suggested topics."""
+    topics = await suggest_initial_exploration_topics(db, user_id, project_id)
+    explorations: list[TechnologyExplorationResponse] = []
+
+    for topic in topics:
+        try:
+            exploration = await explore_technology(db, user_id, project_id, topic)
+            explorations.append(exploration)
+        except HTTPException as e:
+            logger.warning(
+                "Skipped technology exploration for topic %r: %s", topic, e.detail
+            )
+        except Exception as e:
+            logger.error(
+                "Technology exploration failed for topic %r: %s",
+                topic,
+                e,
+                exc_info=True,
+            )
+
+    return explorations

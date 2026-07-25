@@ -19,9 +19,9 @@ from app.database import get_db
 from app.dependencies.getUser import get_current_user
 from app.dependencies.rate_limit import UPLOAD_LIMIT, get_user_id_key, limiter
 from app.models.document import Document
-from app.models.project import Project
+from app.models.project import Project, ProjectAnalysisStatus
 from app.models.user import User
-from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectAnalysisStatusResponse
 from app.services.project_access import (
     get_document_in_project_or_404,
     get_project_or_404,
@@ -110,6 +110,22 @@ async def get_project(
     project = await get_project_or_404(project_id, current_user.id, db)
     count = await _document_count(db, project.id)
     return _project_to_response(project, count)
+
+
+@router.get("/{project_id}/analysis-status", response_model=ProjectAnalysisStatusResponse)
+async def get_project_analysis_status(
+    project_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await get_project_or_404(project_id, current_user.id, db)
+    return ProjectAnalysisStatusResponse(
+        analysis_status=project.analysis_status,
+        requirements_extracted=project.requirements_extracted,
+        technology_suggested=project.technology_suggested,
+        analyzing=project.analysis_status == ProjectAnalysisStatus.RUNNING,
+        last_analyzed_at=project.last_analyzed_at,
+    )
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)

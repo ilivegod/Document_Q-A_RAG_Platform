@@ -44,3 +44,29 @@ def process_document_task(self, document_id):
 
         # Re-raise so Celery's autoretry_for kicks in (or final failure if exhausted)
         raise
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=2,
+    default_retry_delay=120,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
+def auto_analyze_project_task(self, document_id: str, project_id: str, user_id: str):
+    """Run requirements extraction and technology suggestions after document READY."""
+    from app.services.auto_analyzer import auto_analyze_project
+
+    try:
+        asyncio.run(auto_analyze_project(document_id, project_id, user_id))
+    except Exception as exc:
+        attempt = self.request.retries + 1
+        logger.warning(
+            "Project analysis for document %s attempt %d failed: %s",
+            document_id,
+            attempt,
+            exc,
+        )
+        raise
