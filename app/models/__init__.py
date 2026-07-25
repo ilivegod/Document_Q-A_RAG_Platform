@@ -6,3 +6,4 @@ from .conversation import Conversation, Message
 from .project import Project
 from .requirement import Requirement
 from .requirement_baseline import RequirementBaseline
+from .change_request import ChangeRequest

@@ -12,6 +12,7 @@ from app.models.document import Document
 from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.requirement_baseline import RequirementBaseline
+from app.models.change_request import ChangeRequest
 from app.models.conversation import Conversation, Message
 
 from app.config import settings
