@@ -7,6 +7,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
+_ENUM_VALUES = lambda enums: [member.value for member in enums]
+
 
 class RequirementCategory(str, Enum):
     FEATURE = "feature"
@@ -48,16 +50,28 @@ class Requirement(Base):
     title = mapped_column(String(500), nullable=False)
     description = mapped_column(Text, nullable=True)
     category: Mapped[RequirementCategory] = mapped_column(
-        SQLEnum(RequirementCategory, name="requirementcategory"),
+        SQLEnum(
+            RequirementCategory,
+            name="requirementcategory",
+            values_callable=_ENUM_VALUES,
+        ),
         nullable=False,
     )
     priority: Mapped[RequirementPriority] = mapped_column(
-        SQLEnum(RequirementPriority, name="requirementpriority"),
+        SQLEnum(
+            RequirementPriority,
+            name="requirementpriority",
+            values_callable=_ENUM_VALUES,
+        ),
         default=RequirementPriority.UNKNOWN,
         nullable=False,
     )
     status: Mapped[RequirementStatus] = mapped_column(
-        SQLEnum(RequirementStatus, name="requirementstatus"),
+        SQLEnum(
+            RequirementStatus,
+            name="requirementstatus",
+            values_callable=_ENUM_VALUES,
+        ),
         default=RequirementStatus.PROPOSED,
         nullable=False,
     )

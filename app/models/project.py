@@ -7,6 +7,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
+_ENUM_VALUES = lambda enums: [member.value for member in enums]
+
 
 class ProjectType(str, Enum):
     CLIENT = "client"
@@ -29,12 +31,20 @@ class Project(Base):
     description = mapped_column(Text, nullable=True)
     client_name = mapped_column(String(255), nullable=True)
     project_type: Mapped[ProjectType] = mapped_column(
-        SQLEnum(ProjectType, name="projecttype"),
+        SQLEnum(
+            ProjectType,
+            name="projecttype",
+            values_callable=_ENUM_VALUES,
+        ),
         default=ProjectType.INDIE,
         nullable=False,
     )
     status: Mapped[ProjectStatus] = mapped_column(
-        SQLEnum(ProjectStatus, name="projectstatus"),
+        SQLEnum(
+            ProjectStatus,
+            name="projectstatus",
+            values_callable=_ENUM_VALUES,
+        ),
         default=ProjectStatus.ACTIVE,
         nullable=False,
     )

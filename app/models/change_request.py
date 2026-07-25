@@ -7,6 +7,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
+_ENUM_VALUES = lambda enums: [member.value for member in enums]
+
 
 class ChangeRequestStatus(str, Enum):
     OPEN = "open"
@@ -36,7 +38,11 @@ class ChangeRequest(Base):
     )
     request_text = mapped_column(Text, nullable=False)
     status: Mapped[ChangeRequestStatus] = mapped_column(
-        SQLEnum(ChangeRequestStatus, name="changerequeststatus"),
+        SQLEnum(
+            ChangeRequestStatus,
+            name="changerequeststatus",
+            values_callable=_ENUM_VALUES,
+        ),
         default=ChangeRequestStatus.OPEN,
         nullable=False,
     )

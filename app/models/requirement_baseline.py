@@ -7,6 +7,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
+_ENUM_VALUES = lambda enums: [member.value for member in enums]
+
 
 class BaselineStatus(str, Enum):
     DRAFT = "draft"
@@ -23,7 +25,11 @@ class RequirementBaseline(Base):
     )
     version = mapped_column(Integer, nullable=False)
     status: Mapped[BaselineStatus] = mapped_column(
-        SQLEnum(BaselineStatus, name="baselinestatus"),
+        SQLEnum(
+            BaselineStatus,
+            name="baselinestatus",
+            values_callable=_ENUM_VALUES,
+        ),
         default=BaselineStatus.DRAFT,
         nullable=False,
     )
