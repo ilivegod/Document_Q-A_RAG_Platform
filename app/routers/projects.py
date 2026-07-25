@@ -122,7 +122,7 @@ async def get_project_analysis_status(
     return ProjectAnalysisStatusResponse(
         analysis_status=project.analysis_status,
         requirements_extracted=project.requirements_extracted,
-        technology_suggested=project.technology_suggested,
+        technology_generated=project.technology_generated,
         analyzing=project.analysis_status == ProjectAnalysisStatus.RUNNING,
         last_analyzed_at=project.last_analyzed_at,
     )

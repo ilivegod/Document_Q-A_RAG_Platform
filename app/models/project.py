@@ -67,7 +67,7 @@ class Project(Base):
         default=False,
         nullable=False,
     )
-    technology_suggested: Mapped[bool] = mapped_column(
+    technology_generated: Mapped[bool] = mapped_column(
         default=False,
         nullable=False,
     )

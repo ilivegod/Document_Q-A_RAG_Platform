@@ -39,7 +39,7 @@ class ProjectResponse(BaseModel):
 class ProjectAnalysisStatusResponse(BaseModel):
     analysis_status: ProjectAnalysisStatus
     requirements_extracted: bool
-    technology_suggested: bool
+    technology_generated: bool
     analyzing: bool
     last_analyzed_at: datetime | None = None
 

@@ -22,7 +22,6 @@ def requirement_to_response(req: Requirement) -> RequirementResponse:
     return RequirementResponse(
         id=req.id,
         project_id=req.project_id,
-        baseline_id=req.baseline_id,
         stable_id=req.stable_id,
         title=req.title,
         description=req.description,
@@ -42,13 +41,10 @@ async def list_working_requirements(
     db: AsyncSession,
     project_id: UUID,
 ) -> tuple[list[Requirement], list[Requirement]]:
-    """Return (requirements, open_questions) for the working set."""
+    """Return (requirements, open_questions) for the project."""
     result = await db.execute(
         select(Requirement)
-        .where(
-            Requirement.project_id == project_id,
-            Requirement.baseline_id.is_(None),
-        )
+        .where(Requirement.project_id == project_id)
         .order_by(Requirement.sort_order.asc(), Requirement.stable_id.asc())
     )
     rows = result.scalars().all()
@@ -65,11 +61,7 @@ async def get_requirement_or_404(
     from fastapi import HTTPException
 
     req = await db.get(Requirement, requirement_id)
-    if (
-        req is None
-        or req.project_id != project_id
-        or req.baseline_id is not None
-    ):
+    if req is None or req.project_id != project_id:
         raise HTTPException(status_code=404, detail="Requirement not found")
     return req
 
@@ -78,7 +70,6 @@ async def next_stable_id(db: AsyncSession, project_id: UUID, prefix: str = "REQ"
     result = await db.execute(
         select(Requirement.stable_id).where(
             Requirement.project_id == project_id,
-            Requirement.baseline_id.is_(None),
             Requirement.stable_id.like(f"{prefix}-%"),
         )
     )
@@ -109,3 +100,24 @@ def _map_priority(value: str) -> RequirementPriority:
         return RequirementPriority(value)
     except ValueError:
         return RequirementPriority.UNKNOWN
+
+
+async def format_project_requirements_context(
+    db: AsyncSession,
+    project_id: UUID,
+) -> str:
+    requirements, open_questions = await list_working_requirements(db, project_id)
+    if not requirements and not open_questions:
+        return ""
+
+    lines = ["Project requirements:"]
+    for req in requirements:
+        lines.append(
+            f"- {req.stable_id}: {req.title} "
+            f"({req.category.value}, {req.priority.value}, {req.status.value})"
+        )
+    if open_questions:
+        lines.append("\nOpen questions:")
+        for q in open_questions:
+            lines.append(f"- {q.stable_id}: {q.title}")
+    return "\n".join(lines)

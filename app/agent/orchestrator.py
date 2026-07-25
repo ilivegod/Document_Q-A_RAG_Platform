@@ -200,6 +200,7 @@ async def _synthesize_answer(
     web_context: str,
     chat_history: list[dict] | None,
     agent_trace: list[dict],
+    project_context: str = "",
 ) -> LLMAnswer:
     final_model = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash-lite",
@@ -212,6 +213,8 @@ async def _synthesize_answer(
         history_text = "\n".join(lines)
 
     context_sections = []
+    if project_context:
+        context_sections.append(f"Project memory:\n{project_context}")
     if doc_context:
         context_sections.append(f"Document context:\n{doc_context}")
     if web_context:
@@ -327,6 +330,18 @@ async def run_agent(
 
     doc_context = _format_document_context(chunks)
     web_context = _format_web_context(web_findings)
+    project_context = ""
+    if ctx.project_id is not None:
+        from app.services.requirements import format_project_requirements_context
+        from app.services.technology_stack import format_project_stack_context
+
+        requirements_context = await format_project_requirements_context(
+            ctx.db, ctx.project_id
+        )
+        stack_context = await format_project_stack_context(ctx.db, ctx.project_id)
+        project_context = "\n\n".join(
+            part for part in [requirements_context, stack_context] if part
+        )
 
     answer = await _synthesize_answer(
         question=effective_question,
@@ -334,6 +349,7 @@ async def run_agent(
         web_context=web_context,
         chat_history=chat_history,
         agent_trace=public_agent_trace(agent_trace),
+        project_context=project_context,
     )
 
     return answer, public_agent_trace(agent_trace), chunks, web_findings

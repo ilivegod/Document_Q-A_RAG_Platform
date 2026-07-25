@@ -1,4 +1,4 @@
-"""Technology explorer API tests."""
+"""Technology stack API tests."""
 import uuid
 
 import pytest
@@ -15,19 +15,66 @@ async def _create_project(auth_client: AsyncClient) -> str:
 
 
 @pytest.mark.asyncio
-async def test_explore_requires_project_context(auth_client: AsyncClient):
+async def test_list_technology_stack_empty(auth_client: AsyncClient):
     project_id = await _create_project(auth_client)
-    r = await auth_client.post(
-        f"/projects/{project_id}/technology/explore",
-        json={"topic": "Best auth stack for this MVP?"},
-    )
+    r = await auth_client.get(f"/projects/{project_id}/technology")
+    assert r.status_code == 200
+    assert r.json()["categories"] == {}
+
+
+@pytest.mark.asyncio
+async def test_generate_requires_requirements(auth_client: AsyncClient):
+    project_id = await _create_project(auth_client)
+    r = await auth_client.post(f"/projects/{project_id}/technology/generate")
     assert r.status_code == 400
     assert "requirements" in r.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
-async def test_list_technology_explorations_empty(auth_client: AsyncClient):
-    project_id = await _create_project(auth_client)
-    r = await auth_client.get(f"/projects/{project_id}/technology")
+async def test_search_catalog(auth_client: AsyncClient):
+    r = await auth_client.get("/technology/catalog", params={"query": "next"})
     assert r.status_code == 200
-    assert r.json() == []
+    data = r.json()
+    assert len(data) > 0
+    assert any(item["id"] == "nextjs" for item in data)
+
+
+@pytest.mark.asyncio
+async def test_add_unknown_catalog_item_rejected(auth_client: AsyncClient):
+    project_id = await _create_project(auth_client)
+    r = await auth_client.post(
+        f"/projects/{project_id}/technology",
+        json={"catalog_id": "not-a-real-tech"},
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_add_and_remove_catalog_item(auth_client: AsyncClient):
+    project_id = await _create_project(auth_client)
+    r = await auth_client.post(
+        f"/projects/{project_id}/technology",
+        json={"catalog_id": "nextjs"},
+    )
+    assert r.status_code == 201
+    item = r.json()
+    assert item["catalog_id"] == "nextjs"
+    assert item["name"] == "Next.js"
+
+    dup = await auth_client.post(
+        f"/projects/{project_id}/technology",
+        json={"catalog_id": "nextjs"},
+    )
+    assert dup.status_code == 409
+
+    stack = await auth_client.get(f"/projects/{project_id}/technology")
+    assert stack.status_code == 200
+    assert "frontend" in stack.json()["categories"]
+
+    deleted = await auth_client.delete(
+        f"/projects/{project_id}/technology/{item['id']}"
+    )
+    assert deleted.status_code == 204
+
+    stack_after = await auth_client.get(f"/projects/{project_id}/technology")
+    assert stack_after.json()["categories"] == {}

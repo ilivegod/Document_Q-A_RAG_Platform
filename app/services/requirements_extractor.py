@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -7,14 +6,13 @@ from fastapi import HTTPException
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.document import Document, Document_Status
 from app.models.requirement import Requirement, RequirementCategory, RequirementStatus
-from app.models.requirement_baseline import BaselineStatus, RequirementBaseline
-from app.schemas.baseline import BaselineResponse
+from app.services.llm_errors import raise_llm_http_error
 from app.services.project_access import get_project_or_404
 from app.services.qa_chain import format_chunks_into_text
 from app.services.retrieval import hybrid_search
@@ -139,19 +137,14 @@ Context:
     ).with_structured_output(RequirementsExtractionResult)
 
     try:
-        result: RequirementsExtractionResult = (prompt | model).invoke({"context": context})
+        result: RequirementsExtractionResult = await (prompt | model).ainvoke(
+            {"context": context}
+        )
     except Exception as e:
-        logger.error(f"Requirements extraction failed: {e}", exc_info=True)
-        raise HTTPException(status_code=502, detail="Failed to extract requirements") from e
-
-    # Remove existing working set before inserting fresh extraction
-    from sqlalchemy import delete
+        raise_llm_http_error(e, action="extract requirements")
 
     await db.execute(
-        delete(Requirement).where(
-            Requirement.project_id == project_id,
-            Requirement.baseline_id.is_(None),
-        )
+        delete(Requirement).where(Requirement.project_id == project_id)
     )
 
     created: list[Requirement] = []
@@ -207,111 +200,3 @@ Context:
         await db.refresh(req)
 
     return created, result.ambiguities, result.contradictions
-
-
-async def approve_baseline(
-    db: AsyncSession,
-    user_id: UUID,
-    project_id: UUID,
-    label: str | None = None,
-) -> BaselineResponse:
-    await get_project_or_404(project_id, user_id, db)
-
-    result = await db.execute(
-        select(Requirement).where(
-            Requirement.project_id == project_id,
-            Requirement.baseline_id.is_(None),
-            Requirement.status == RequirementStatus.CONFIRMED,
-            Requirement.category != RequirementCategory.OPEN_QUESTION,
-        )
-    )
-    confirmed = result.scalars().all()
-    if not confirmed:
-        raise HTTPException(
-            status_code=400,
-            detail="Confirm at least one requirement before approving a baseline.",
-        )
-
-    version_result = await db.execute(
-        select(func.max(RequirementBaseline.version)).where(
-            RequirementBaseline.project_id == project_id
-        )
-    )
-    next_version = int(version_result.scalar_one() or 0) + 1
-
-    snapshot = [
-        {
-            "stable_id": r.stable_id,
-            "title": r.title,
-            "description": r.description,
-            "category": r.category.value,
-            "priority": r.priority.value,
-            "status": r.status.value,
-            "acceptance_criteria": r.acceptance_criteria or [],
-            "assumptions": r.assumptions or [],
-            "source_refs": r.source_refs or [],
-        }
-        for r in confirmed
-    ]
-
-    await db.execute(
-        update(RequirementBaseline)
-        .where(
-            RequirementBaseline.project_id == project_id,
-            RequirementBaseline.status == BaselineStatus.APPROVED,
-        )
-        .values(status=BaselineStatus.SUPERSEDED)
-    )
-
-    baseline = RequirementBaseline(
-        project_id=project_id,
-        version=next_version,
-        status=BaselineStatus.APPROVED,
-        label=label or f"Baseline v{next_version}",
-        snapshot=snapshot,
-        approved_at=datetime.now(timezone.utc),
-    )
-    db.add(baseline)
-    await db.commit()
-    await db.refresh(baseline)
-
-    return BaselineResponse(
-        id=baseline.id,
-        project_id=baseline.project_id,
-        version=baseline.version,
-        status=baseline.status,
-        label=baseline.label,
-        snapshot=baseline.snapshot,
-        approved_at=baseline.approved_at,
-        created_at=baseline.created_at,
-    )
-
-
-async def get_current_baseline(
-    db: AsyncSession,
-    user_id: UUID,
-    project_id: UUID,
-) -> BaselineResponse | None:
-    await get_project_or_404(project_id, user_id, db)
-    result = await db.execute(
-        select(RequirementBaseline)
-        .where(
-            RequirementBaseline.project_id == project_id,
-            RequirementBaseline.status == BaselineStatus.APPROVED,
-        )
-        .order_by(RequirementBaseline.version.desc())
-        .limit(1)
-    )
-    baseline = result.scalar_one_or_none()
-    if baseline is None:
-        return None
-    return BaselineResponse(
-        id=baseline.id,
-        project_id=baseline.project_id,
-        version=baseline.version,
-        status=baseline.status,
-        label=baseline.label,
-        snapshot=baseline.snapshot,
-        approved_at=baseline.approved_at,
-        created_at=baseline.created_at,
-    )

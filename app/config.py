@@ -75,6 +75,21 @@ class Settings(BaseSettings):
             if origin.strip()
         ]
 
+    @field_validator("google_api_key")
+    @classmethod
+    def google_api_key_format(cls, v: str) -> str:
+        """Warn when the key is not a Google AI Studio API key (AIza...)."""
+        if v in ("test-key", "your_google_api_key_here"):
+            return v
+        if not v.startswith("AIza"):
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "GOOGLE_API_KEY does not look like a Google AI Studio key "
+                "(expected AIza...). Get one at https://aistudio.google.com/apikey"
+            )
+        return v
+
     @field_validator("jwt_secret")
     @classmethod
     def jwt_secret_must_be_strong(cls, v: str) -> str:

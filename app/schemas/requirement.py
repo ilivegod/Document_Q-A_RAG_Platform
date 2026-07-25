@@ -20,7 +20,6 @@ class SourceRef(BaseModel):
 class RequirementResponse(BaseModel):
     id: UUID
     project_id: UUID
-    baseline_id: UUID | None = None
     stable_id: str
     title: str
     description: str | None = None
@@ -49,7 +48,7 @@ class RequirementUpdate(BaseModel):
 
 class ExtractRequirementsResponse(BaseModel):
     requirements: list[RequirementResponse]
-    open_questions: list[str]
+    open_questions: list[RequirementResponse]
     ambiguities: list[str]
     contradictions: list[str]
 

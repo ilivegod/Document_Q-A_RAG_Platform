@@ -40,12 +40,6 @@ class Requirement(Base):
     project_id = mapped_column(
         UUID, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    baseline_id = mapped_column(
-        UUID,
-        ForeignKey("requirement_baselines.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
-    )
     stable_id = mapped_column(String(32), nullable=False)
     title = mapped_column(String(500), nullable=False)
     description = mapped_column(Text, nullable=True)

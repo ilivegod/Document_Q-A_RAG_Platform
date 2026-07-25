@@ -11,10 +11,7 @@ from app.models.chunk import Chunk
 from app.models.document import Document
 from app.models.project import Project
 from app.models.requirement import Requirement
-from app.models.requirement_baseline import RequirementBaseline
-from app.models.change_request import ChangeRequest
-from app.models.technology_exploration import TechnologyExploration
-from app.models.project_decision import ProjectDecision
+from app.models.project_technology import ProjectTechnology
 from app.models.conversation import Conversation, Message
 
 from app.config import settings
