@@ -7,20 +7,13 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.agent.context import AgentContext
 from app.agent.registry import (
-    GENERATE_FLASHCARDS,
-    GENERATE_QUIZ,
     GET_PAGE_CONTENT,
     KEYWORD_SEARCH,
     LIST_USER_DOCUMENTS,
     SEARCH_DOCUMENTS,
     WEB_RESEARCH,
 )
-from app.agent.study_output import (
-    detect_study_intent,
-    public_agent_trace,
-    resolve_follow_up_question,
-    study_answer_from_trace,
-)
+from app.agent.trace_utils import public_agent_trace, resolve_follow_up_question
 from app.agent.tools.handlers import build_args_schema, build_tool_specs, execute_tool
 from app.config import settings
 from app.models.user import UserTier
@@ -31,24 +24,21 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_CALLS = 5
 
-AGENT_SYSTEM = """You are DocQA, an assistant that helps users understand their uploaded PDF and DOCX files.
-You ONLY answer questions about the user's uploaded documents.
+AGENT_SYSTEM = """You are Project Copilot, an assistant that helps freelancers and indie builders
+understand project documents — specs, contracts, briefs, and notes in PDF or DOCX format.
+You ONLY answer questions grounded in the user's uploaded documents for the current project.
 
 Tool usage:
 - search_documents: semantic/conceptual questions about document content (use first for most questions)
 - keyword_search: exact terms, dates, names, or phrases in documents
 - get_page_content: when the user asks about a specific page number (page_number only in single-document chat)
-- list_user_documents: discover what files the user has uploaded
-- generate_flashcards / generate_quiz: study materials from document content.
-  When the user asks for flashcards, call generate_flashcards (after search_documents if needed).
-  When the user asks for a quiz, call generate_quiz only — not both unless they ask for both.
-  Never refuse flashcard or quiz requests; always use the tool and return the generated content.
+- list_user_documents: discover what files the user has uploaded for this project
 - web_research: ONLY to supplement a topic already found via search_documents (e.g. explain a
-  term like "critical thinking" that appears in the file). Always call search_documents first.
+  term that appears in the file). Always call search_documents first.
   Never for weather, news, sports, or topics not in the user's files.
 
 Do NOT use tools for identity or meta questions ("who are you", "what can you do", greetings).
-Answer those directly: you are DocQA and you help users understand their uploaded documents.
+Answer those directly: you are Project Copilot and you help users understand their project documents.
 
 Do NOT use any tools for clearly off-topic questions (weather, news, jokes) unrelated to their files.
 For document topics (including concepts named in the file), always use search_documents first.
@@ -61,14 +51,14 @@ Never invent facts not supported by tool results.
 """
 
 OFF_TOPIC_DOCUMENT_ONLY = (
-    "I only answer questions based on your uploaded documents. "
+    "I only answer questions based on your uploaded project documents. "
     "Ask me something about your files."
 )
 
-FINAL_ANSWER_RULES = f"""You are DocQA. Follow these response rules strictly.
+FINAL_ANSWER_RULES = f"""You are Project Copilot. Follow these response rules strictly.
 
 Identity / capabilities (answer with has_answer=True, no citations needed):
-- If asked who you are or what you do, say: "I'm DocQA. I help you understand your uploaded documents by searching them and answering with citations."
+- If asked who you are or what you do, say: "I'm Project Copilot. I help you understand your project documents by searching them and answering with citations."
 
 Forbidden phrasing (never use):
 - Do not say you are a generic AI, language model, chatbot, or mention training data / knowledge cutoffs.
@@ -89,11 +79,6 @@ Document questions without enough context:
 Web context usage:
 - Only use internet citations [W1], [W2] when web results supplement something from the user's documents.
 - Do not answer general off-topic questions even if web context appears below.
-
-Study materials (flashcards / quiz):
-- When tool activity shows generate_flashcards or generate_quiz output, present that content directly.
-- Do not ask the user to confirm again — deliver the flashcards or quiz in your answer.
-- Set has_answer=True and format cards or questions clearly for the user.
 """
 
 
@@ -104,8 +89,6 @@ _DOC_TOOLS = {
     LIST_USER_DOCUMENTS,
 }
 
-_STUDY_TOOLS = {GENERATE_FLASHCARDS, GENERATE_QUIZ}
-
 
 def _sort_tool_calls(tool_calls: list) -> list:
     """Run document tools before web_research when the model batches calls."""
@@ -114,8 +97,6 @@ def _sort_tool_calls(tool_calls: list) -> list:
         name = tc.get("name", "")
         if name in _DOC_TOOLS:
             return 0
-        if name in _STUDY_TOOLS:
-            return 1
         if name == WEB_RESEARCH:
             return 2
         return 1
@@ -147,40 +128,11 @@ async def _append_tool_step(
         "input": args,
         "output_summary": summary,
     }
-    if name in _STUDY_TOOLS:
-        step["_full_output"] = result
     if name == WEB_RESEARCH and ctx.last_web_sub_steps:
         step["metadata"] = {"sub_steps": ctx.last_web_sub_steps}
         web_count = len(ctx.collected_web_sources)
         step["output_summary"] = f"{web_count} web source(s): {summary[:400]}"
     agent_trace.append(step)
-
-
-async def _ensure_study_tools(
-    question: str,
-    ctx: AgentContext,
-    tier: UserTier,
-    allowed_names: set[str],
-    agent_trace: list[dict],
-) -> None:
-    """Run search + study tool when the model skipped them but the user asked."""
-    intent, args = detect_study_intent(question)
-    if not intent or intent not in allowed_names:
-        return
-    if any(step.get("tool") == intent for step in agent_trace):
-        return
-
-    if not ctx.collected_chunks and SEARCH_DOCUMENTS in allowed_names:
-        await _append_tool_step(
-            ctx,
-            tier,
-            allowed_names,
-            agent_trace,
-            SEARCH_DOCUMENTS,
-            {"query": args.get("topic", question), "k": 8},
-        )
-
-    await _append_tool_step(ctx, tier, allowed_names, agent_trace, intent, args)
 
 
 def _make_langchain_tool(ctx: AgentContext, tier: UserTier, spec) -> StructuredTool:
@@ -362,27 +314,13 @@ async def run_agent(
             await _append_tool_step(ctx, tier, allowed_names, agent_trace, name, args)
             messages.append(
                 ToolMessage(
-                    content=agent_trace[-1].get("_full_output")
-                    or agent_trace[-1]["output_summary"],
+                    content=agent_trace[-1]["output_summary"],
                     tool_call_id=tc["id"],
                 )
             )
 
             if tool_call_count >= MAX_TOOL_CALLS:
                 break
-
-    await _ensure_study_tools(
-        effective_question, ctx, tier, allowed_names, agent_trace
-    )
-
-    study_answer = study_answer_from_trace(
-        agent_trace,
-        preferred_tool=detect_study_intent(effective_question)[0],
-    )
-    if study_answer:
-        chunks = _dedupe_chunks(ctx.collected_chunks)
-        web_findings = _dedupe_web_findings(ctx.collected_web_sources)
-        return study_answer, public_agent_trace(agent_trace), chunks, web_findings
 
     chunks = _dedupe_chunks(ctx.collected_chunks)
     web_findings = _dedupe_web_findings(ctx.collected_web_sources)

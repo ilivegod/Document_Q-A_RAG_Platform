@@ -1,4 +1,4 @@
-# Fly.io deployment for DocQA API
+# Fly.io deployment for Project Copilot API
 # Deploy: fly deploy (from Document_Q&A_RAG_Platform/)
 
 app = "docqa-api"

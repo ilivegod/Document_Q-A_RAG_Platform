@@ -15,7 +15,7 @@ from app.mcp.servers import McpServerConfig, get_ddg_server, get_wiki_server
 
 logger = logging.getLogger(__name__)
 
-_HTTP_USER_AGENT = "DocQA/1.0 (document Q&A; +https://github.com/docqa)"
+_HTTP_USER_AGENT = "ProjectCopilot/1.0 (project document Q&A; +https://github.com/ilivegod/citadel)"
 
 
 def _tool_result_to_text(result: Any) -> str:

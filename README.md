@@ -1,8 +1,8 @@
-# DocQA — AI-Powered Document Q&A Platform
+# Project Copilot — AI-Powered Project Document Intelligence
 
-Upload documents. Ask questions. Get answers with citations.
+Upload project documents. Ask questions. Capture requirements, analyze changes, and log decisions — all with citations.
 
-DocQA is a full-stack Retrieval-Augmented Generation (RAG) platform that transforms PDF and DOCX files into searchable knowledge bases. Users upload documents, the system parses, chunks, and embeds them into vectors, then answers natural language questions with precise citations pointing back to the source material.
+Project Copilot is a full-stack Retrieval-Augmented Generation (RAG) platform for freelancers and indie builders. Organize work in project workspaces, upload PDFs and DOCX files, then use agentic workflows to understand scope, compare technologies, and keep a decision trail grounded in your source material.
 
 ---
 
@@ -218,8 +218,7 @@ docker-compose down -v
 | `list_user_documents` | Free | List uploaded docs |
 | `keyword_search` | Pro | Hybrid FTS + vector (`content_tsv`) |
 | `get_page_content` | Pro | Full page text by page number |
-| `generate_flashcards` | Pro | JSON flashcards from context |
-| `generate_quiz` | Pro | MCQ quiz from context |
+| `web_research` | Pro | MCP web search (Wikipedia + DuckDuckGo) |
 
 Set `"stream": true` for SSE (`tool_step`, `token`, `done` events). Agent traces are stored on assistant messages (`agent_trace` JSONB).
 

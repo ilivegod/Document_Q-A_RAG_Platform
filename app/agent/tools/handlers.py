@@ -6,8 +6,6 @@ from sqlalchemy import select
 
 from app.agent.context import AgentContext
 from app.agent.registry import (
-    GENERATE_FLASHCARDS,
-    GENERATE_QUIZ,
     GET_PAGE_CONTENT,
     KEYWORD_SEARCH,
     LIST_USER_DOCUMENTS,
@@ -25,17 +23,12 @@ from app.services.retrieval import (
     hybrid_search,
     similarity_search,
 )
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import PromptTemplate
-
 _WEB_RESEARCH_LIMIT_ITEM = parse_limit(WEB_RESEARCH_LIMIT)
 
 _TOOL_ALLOWED_KEYS: dict[str, set[str]] = {
     SEARCH_DOCUMENTS: {"query", "k", "document_id"},
     KEYWORD_SEARCH: {"query", "k", "document_id"},
     GET_PAGE_CONTENT: {"document_id", "page_number"},
-    GENERATE_FLASHCARDS: {"topic", "count"},
-    GENERATE_QUIZ: {"topic", "count"},
     WEB_RESEARCH: {"query", "prefer"},
 }
 
@@ -181,64 +174,6 @@ async def _list_user_documents(ctx: AgentContext) -> str:
     return "Your documents:\n" + "\n".join(lines)
 
 
-async def _generate_flashcards(ctx: AgentContext, topic: str, count: int = 5) -> str:
-    chunks = ctx.collected_chunks
-    if not chunks:
-        chunks = await similarity_search(
-            question=topic,
-            db=ctx.db,
-            user_id=ctx.user_id,
-            document_id=ctx.document_id,
-            k=8,
-        )
-        ctx.collected_chunks.extend(chunks)
-    context = "\n\n".join(c.content[:500] for c in chunks[:8])
-    model = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite",
-        google_api_key=settings.google_api_key,
-    )
-    prompt = PromptTemplate.from_template(
-        """From this document context, create {count} flashcards about: {topic}
-Return valid JSON only: {{"cards": [{{"front": "...", "back": "..."}}]}}
-
-Context:
-{context}
-"""
-    )
-    chain = prompt | model
-    out = chain.invoke({"count": count, "topic": topic, "context": context})
-    return out.content if hasattr(out, "content") else str(out)
-
-
-async def _generate_quiz(ctx: AgentContext, topic: str, count: int = 3) -> str:
-    chunks = ctx.collected_chunks
-    if not chunks:
-        chunks = await similarity_search(
-            question=topic,
-            db=ctx.db,
-            user_id=ctx.user_id,
-            document_id=ctx.document_id,
-            k=8,
-        )
-        ctx.collected_chunks.extend(chunks)
-    context = "\n\n".join(c.content[:500] for c in chunks[:8])
-    model = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite",
-        google_api_key=settings.google_api_key,
-    )
-    prompt = PromptTemplate.from_template(
-        """From this document context, create {count} multiple-choice questions about: {topic}
-Return valid JSON only: {{"questions": [{{"question": "...", "options": ["A","B","C","D"], "correct_index": 0}}]}}
-
-Context:
-{context}
-"""
-    )
-    chain = prompt | model
-    out = chain.invoke({"count": count, "topic": topic, "context": context})
-    return out.content if hasattr(out, "content") else str(out)
-
-
 async def _web_research(
     ctx: AgentContext,
     query: str,
@@ -284,10 +219,6 @@ async def execute_tool(
         return await _get_page_content(ctx, **args)
     if tool_name == LIST_USER_DOCUMENTS:
         return await _list_user_documents(ctx)
-    if tool_name == GENERATE_FLASHCARDS:
-        return await _generate_flashcards(ctx, **args)
-    if tool_name == GENERATE_QUIZ:
-        return await _generate_quiz(ctx, **args)
     if tool_name == WEB_RESEARCH:
         return await _web_research(ctx, **args)
     return f"Unknown tool: {tool_name}"
@@ -366,34 +297,6 @@ def build_tool_specs(tier: UserTier) -> list[ToolSpec]:
             parameters={"type": "object", "properties": {}},
             handler=_list_user_documents,
             min_tier=UserTier.FREE,
-        ),
-        ToolSpec(
-            name=GENERATE_FLASHCARDS,
-            description="Generate study flashcards from document content on a topic.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "topic": {"type": "string"},
-                    "count": {"type": "integer", "default": 5},
-                },
-                "required": ["topic"],
-            },
-            handler=_generate_flashcards,
-            min_tier=UserTier.PRO,
-        ),
-        ToolSpec(
-            name=GENERATE_QUIZ,
-            description="Generate multiple-choice quiz questions from document content.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "topic": {"type": "string"},
-                    "count": {"type": "integer", "default": 3},
-                },
-                "required": ["topic"],
-            },
-            handler=_generate_quiz,
-            min_tier=UserTier.PRO,
         ),
         ToolSpec(
             name=WEB_RESEARCH,

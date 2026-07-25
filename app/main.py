@@ -40,7 +40,7 @@ from app.routers.decisions import router as decisions_router
 logger = logging.getLogger(__name__)
 
 
-app = FastAPI(title="DocQA API")
+app = FastAPI(title="Project Copilot API")
 
 # Attach the limiter to app state and register the 429 handler.
 # Both are required for slowapi to function.

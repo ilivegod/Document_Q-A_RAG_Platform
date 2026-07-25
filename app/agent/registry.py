@@ -19,8 +19,6 @@ SEARCH_DOCUMENTS = "search_documents"
 KEYWORD_SEARCH = "keyword_search"
 GET_PAGE_CONTENT = "get_page_content"
 LIST_USER_DOCUMENTS = "list_user_documents"
-GENERATE_FLASHCARDS = "generate_flashcards"
-GENERATE_QUIZ = "generate_quiz"
 WEB_RESEARCH = "web_research"
 
 ALL_TOOLS = {
@@ -28,8 +26,6 @@ ALL_TOOLS = {
     KEYWORD_SEARCH,
     GET_PAGE_CONTENT,
     LIST_USER_DOCUMENTS,
-    GENERATE_FLASHCARDS,
-    GENERATE_QUIZ,
     WEB_RESEARCH,
 }
 

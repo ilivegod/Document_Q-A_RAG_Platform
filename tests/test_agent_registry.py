@@ -10,7 +10,7 @@ def test_closed_beta_unlocks_all_tools_for_free_tier(monkeypatch):
     assert tier_allows_tool(UserTier.FREE, "keyword_search")
     assert tier_allows_tool(UserTier.FREE, "web_research")
     specs = build_tool_specs(UserTier.FREE)
-    assert len(specs) >= 6
+    assert len(specs) >= 5
 
 
 def test_tier_gating_when_closed_beta_disabled(monkeypatch):
