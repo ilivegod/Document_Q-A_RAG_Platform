@@ -28,6 +28,8 @@ from app.routers.conversations import router as conversations_router
 from app.routers.agent import router as agent_router
 from app.routers.billing import router as billing_router
 from app.routers.projects import router as projects_router
+from app.routers.requirements import router as requirements_router
+from app.routers.baselines import router as baselines_router
 
 
 
@@ -50,6 +52,8 @@ app.include_router(conversations_router)
 app.include_router(agent_router)
 app.include_router(billing_router)
 app.include_router(projects_router)
+app.include_router(requirements_router)
+app.include_router(baselines_router)
 
 app.add_middleware(ErrorHandlerMiddleware)
 

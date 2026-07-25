@@ -10,6 +10,8 @@ from app.models import user
 from app.models.chunk import Chunk
 from app.models.document import Document
 from app.models.project import Project
+from app.models.requirement import Requirement
+from app.models.requirement_baseline import RequirementBaseline
 from app.models.conversation import Conversation, Message
 
 from app.config import settings

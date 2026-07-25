@@ -17,6 +17,7 @@ _INTEGRATION_TEST_FILES = {
     "test_documents.py",
     "test_closed_beta.py",
     "test_projects.py",
+    "test_requirements.py",
 }
 
 
