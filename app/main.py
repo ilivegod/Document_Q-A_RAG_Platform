@@ -31,6 +31,7 @@ from app.routers.projects import router as projects_router
 from app.routers.requirements import router as requirements_router
 from app.routers.baselines import router as baselines_router
 from app.routers.change_requests import router as change_requests_router
+from app.routers.technology import router as technology_router
 
 
 
@@ -56,6 +57,7 @@ app.include_router(projects_router)
 app.include_router(requirements_router)
 app.include_router(baselines_router)
 app.include_router(change_requests_router)
+app.include_router(technology_router)
 
 app.add_middleware(ErrorHandlerMiddleware)
 

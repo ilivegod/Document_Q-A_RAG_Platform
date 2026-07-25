@@ -15,8 +15,8 @@ import uuid
 
 
 class TokenType(str, Enum):
-    PASSWORD_RESET = "password_reset"
-    EMAIL_VERIFICATION = "email_verification"
+    PASSWORD_RESET = "PASSWORD_RESET"
+    EMAIL_VERIFICATION = "EMAIL_VERIFICATION"
     ADMIN_APPROVAL = "admin_approval"
 
 
@@ -48,7 +48,11 @@ class AuthToken(Base):
         nullable=False,
     )
     token_type: Mapped[TokenType] = mapped_column(
-        SQLEnum(TokenType, name="tokentype"),
+        SQLEnum(
+            TokenType,
+            name="tokentype",
+            values_callable=lambda enums: [member.value for member in enums],
+        ),
         nullable=False,
     )
     token_hash = mapped_column(String(64), nullable=False, unique=True)

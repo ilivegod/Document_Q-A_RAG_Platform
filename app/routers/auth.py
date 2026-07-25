@@ -128,6 +128,7 @@ async def register_user(
     except Exception:
         # Log so we don't silently lose track of failures.
         logger.exception("Failed to send verification email during registration")
+        await db.rollback()
 
     # Closed beta: notify admin to approve before the user can log in.
     if settings.closed_beta_enabled and settings.admin_email:
@@ -150,11 +151,14 @@ async def register_user(
             )
         except Exception:
             logger.exception("Failed to send admin approval email during registration")
+            await db.rollback()
 
-    # create_token's commit expired db_user's attributes. Refresh so the
-    # response serialization can access them without triggering a lazy
-    # load (which would fail with MissingGreenlet outside the async context).
-    await db.refresh(db_user)
+    db_user = await db.get(User, user_id)
+    if db_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed",
+        )
     return db_user
 
 
