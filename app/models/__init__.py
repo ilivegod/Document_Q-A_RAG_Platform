@@ -8,3 +8,4 @@ from .requirement import Requirement
 from .requirement_baseline import RequirementBaseline
 from .change_request import ChangeRequest
 from .technology_exploration import TechnologyExploration
+from .project_decision import ProjectDecision
