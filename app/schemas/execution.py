@@ -183,6 +183,29 @@ class PlanProposalResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DeliveryHealthResponse(BaseModel):
+    score: int
+    level: str
+    summary: str
+    task_counts: dict[str, int]
+    blocked_count: int
+    done_ratio: float
+    requirement_coverage: float
+    uncovered_confirmed_requirements: int
+    open_question_count: int
+    active_milestone_count: int
+    signals: list[str]
+
+
+class CheckInResponse(BaseModel):
+    health: DeliveryHealthResponse
+    summary: str
+    highlights: list[str]
+    risks: list[str]
+    suggested_next: list[str]
+    proposal: PlanProposalResponse | None = None
+
+
 class ExecutionBoardResponse(BaseModel):
     """Grouped execution snapshot for the upcoming UI."""
 
@@ -192,3 +215,4 @@ class ExecutionBoardResponse(BaseModel):
     recent_activity: list[ActivityEventResponse]
     pending_proposals: list[PlanProposalResponse]
     task_counts: dict[str, int]
+    delivery_health: DeliveryHealthResponse | None = None

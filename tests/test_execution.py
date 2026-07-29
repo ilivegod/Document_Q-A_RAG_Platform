@@ -26,6 +26,8 @@ async def test_execution_board_empty(auth_client: AsyncClient):
     assert data["recent_activity"] == []
     assert data["pending_proposals"] == []
     assert data["task_counts"]["total"] == 0
+    assert data["delivery_health"] is not None
+    assert data["delivery_health"]["level"] == "not_started"
 
 
 @pytest.mark.asyncio

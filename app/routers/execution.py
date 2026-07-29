@@ -16,9 +16,11 @@ from app.models.user import User
 from app.schemas.execution import (
     ActivityEventCreate,
     ActivityEventResponse,
+    CheckInResponse,
     DecisionCreate,
     DecisionResponse,
     DecisionUpdate,
+    DeliveryHealthResponse,
     ExecutionBoardResponse,
     MilestoneCreate,
     MilestoneResponse,
@@ -63,12 +65,16 @@ async def get_execution_board(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.services.delivery_health import get_delivery_health, health_to_dict
+
     await get_project_or_404(project_id, current_user.id, db)
     milestones = await list_milestones(db, project_id)
     tasks = await list_tasks(db, project_id)
     decisions = await list_decisions(db, project_id)
     activity = await list_activity(db, project_id, limit=30)
     pending = await list_proposals(db, project_id, status=ProposalStatus.PENDING)
+    health = await get_delivery_health(db, current_user.id, project_id)
+
     return ExecutionBoardResponse(
         milestones=[milestone_to_response(m) for m in milestones],
         tasks=[task_to_response(t) for t in tasks],
@@ -76,6 +82,41 @@ async def get_execution_board(
         recent_activity=[activity_to_response(a) for a in activity],
         pending_proposals=[proposal_to_response(p) for p in pending],
         task_counts=task_counts(tasks),
+        delivery_health=DeliveryHealthResponse(**health_to_dict(health)),
+    )
+
+
+@router.get("/delivery-health", response_model=DeliveryHealthResponse)
+async def get_project_delivery_health(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.services.delivery_health import get_delivery_health, health_to_dict
+
+    health = await get_delivery_health(db, current_user.id, project_id)
+    return DeliveryHealthResponse(**health_to_dict(health))
+
+
+@router.post("/check-in", response_model=CheckInResponse)
+async def project_check_in(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.services.delivery_health import health_to_dict
+    from app.services.project_checkin import run_project_check_in
+
+    health, result, proposal = await run_project_check_in(
+        db, current_user.id, project_id
+    )
+    return CheckInResponse(
+        health=DeliveryHealthResponse(**health_to_dict(health)),
+        summary=result.summary,
+        highlights=result.highlights,
+        risks=result.risks,
+        suggested_next=result.suggested_next,
+        proposal=proposal_to_response(proposal) if proposal else None,
     )
 
 

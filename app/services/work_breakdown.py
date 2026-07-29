@@ -346,11 +346,13 @@ async def decide_and_maybe_apply_proposal(
     proposal.status = status
     proposal.decided_at = datetime.now(timezone.utc)
 
-    if (
-        status == ProposalStatus.APPROVED
-        and proposal.proposal_type == ProposalType.WORK_BREAKDOWN
-    ):
-        await apply_work_breakdown_proposal(db, project_id, proposal)
+    if status == ProposalStatus.APPROVED:
+        if proposal.proposal_type == ProposalType.WORK_BREAKDOWN:
+            await apply_work_breakdown_proposal(db, project_id, proposal)
+        elif proposal.proposal_type == ProposalType.REPLAN:
+            from app.services.project_checkin import apply_replan_proposal
+
+            await apply_replan_proposal(db, project_id, proposal)
 
     await record_activity(
         db,
