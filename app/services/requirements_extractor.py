@@ -1,48 +1,34 @@
 import logging
-from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.document import Document, Document_Status
-from app.models.requirement import Requirement, RequirementCategory, RequirementStatus
+from app.models.requirement import Requirement
 from app.services.llm_errors import raise_llm_http_error
 from app.services.project_access import get_project_or_404
 from app.services.qa_chain import format_chunks_into_text
+from app.services.requirements_merge import (
+    ExtractMergeSummary,
+    RequirementsExtractionResult,
+    merge_extraction_into_requirements,
+)
 from app.services.retrieval import hybrid_search
 
 logger = logging.getLogger(__name__)
 
-
-class ExtractedRequirementItem(BaseModel):
-    stable_id: str = Field(description="Stable id like REQ-001")
-    title: str
-    description: str
-    category: str
-    priority: str = "unknown"
-    acceptance_criteria: list[str] = Field(default_factory=list)
-    assumptions: list[str] = Field(default_factory=list)
-    source_citation_indexes: list[int] = Field(default_factory=list)
-
-
-class ExtractedOpenQuestion(BaseModel):
-    title: str
-    description: str
-    source_citation_indexes: list[int] = Field(default_factory=list)
-
-
-class RequirementsExtractionResult(BaseModel):
-    requirements: list[ExtractedRequirementItem] = Field(default_factory=list)
-    open_questions: list[ExtractedOpenQuestion] = Field(default_factory=list)
-    ambiguities: list[str] = Field(default_factory=list)
-    contradictions: list[str] = Field(default_factory=list)
-
+# Re-export for callers/tests that imported from this module previously.
+__all__ = [
+    "ExtractMergeSummary",
+    "RequirementsExtractionResult",
+    "extract_requirements_for_project",
+    "merge_extraction_into_requirements",
+]
 
 EXTRACTION_QUERIES = [
     "functional requirements features user stories MVP scope",
@@ -74,20 +60,11 @@ async def _gather_project_chunks(
     return chunks[:20]
 
 
-def _chunk_source_ref(chunk, user_id: UUID) -> dict[str, Any]:
-    return {
-        "document_id": str(chunk.doc_id),
-        "chunk_id": str(chunk.id),
-        "page": (chunk.page_num or 0) + 1,
-        "excerpt": (chunk.content or "")[:300],
-    }
-
-
 async def extract_requirements_for_project(
     db: AsyncSession,
     user_id: UUID,
     project_id: UUID,
-) -> tuple[list[Requirement], list[str], list[str]]:
+) -> tuple[list[Requirement], list[str], list[str], ExtractMergeSummary]:
     await get_project_or_404(project_id, user_id, db)
 
     doc_count = await db.execute(
@@ -143,60 +120,23 @@ Context:
     except Exception as e:
         raise_llm_http_error(e, action="extract requirements")
 
-    await db.execute(
-        delete(Requirement).where(Requirement.project_id == project_id)
+    existing_result = await db.execute(
+        select(Requirement).where(Requirement.project_id == project_id)
+    )
+    existing = list(existing_result.scalars().all())
+
+    added_rows, updated_rows, summary = merge_extraction_into_requirements(
+        existing,
+        result,
+        project_id=project_id,
+        chunks=chunks,
     )
 
-    created: list[Requirement] = []
-    sort_order = 0
-
-    for item in result.requirements:
-        source_refs = []
-        for idx in item.source_citation_indexes:
-            if 1 <= idx <= len(chunks):
-                source_refs.append(_chunk_source_ref(chunks[idx - 1], user_id))
-
-        from app.services.requirements import _map_category, _map_priority
-
-        req = Requirement(
-            project_id=project_id,
-            stable_id=item.stable_id,
-            title=item.title,
-            description=item.description,
-            category=_map_category(item.category),
-            priority=_map_priority(item.priority),
-            status=RequirementStatus.PROPOSED,
-            acceptance_criteria=item.acceptance_criteria or [],
-            assumptions=item.assumptions or [],
-            source_refs=source_refs,
-            sort_order=sort_order,
-        )
-        sort_order += 1
+    for req in added_rows:
         db.add(req)
-        created.append(req)
-
-    for q in result.open_questions:
-        source_refs = []
-        for idx in q.source_citation_indexes:
-            if 1 <= idx <= len(chunks):
-                source_refs.append(_chunk_source_ref(chunks[idx - 1], user_id))
-
-        req = Requirement(
-            project_id=project_id,
-            stable_id=f"Q-{sort_order + 1:03d}",
-            title=q.title,
-            description=q.description,
-            category=RequirementCategory.OPEN_QUESTION,
-            status=RequirementStatus.PROPOSED,
-            source_refs=source_refs,
-            sort_order=sort_order,
-        )
-        sort_order += 1
-        db.add(req)
-        created.append(req)
 
     await db.commit()
-    for req in created:
+    for req in [*added_rows, *updated_rows]:
         await db.refresh(req)
 
-    return created, result.ambiguities, result.contradictions
+    return [*added_rows, *updated_rows], result.ambiguities, result.contradictions, summary

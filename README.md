@@ -1,8 +1,8 @@
-# Project Copilot — AI-Powered Project Document Intelligence
+# Shiori — AI-Powered Project Document Intelligence
 
 Upload project documents. Ask questions. Capture requirements, analyze changes, and log decisions — all with citations.
 
-Project Copilot is a full-stack Retrieval-Augmented Generation (RAG) platform for freelancers and indie builders. Organize work in project workspaces, upload PDFs and DOCX files, then use agentic workflows to understand scope, compare technologies, and keep a decision trail grounded in your source material.
+Shiori is a full-stack Retrieval-Augmented Generation (RAG) platform for freelancers and indie builders. Organize work in project workspaces, upload PDFs and DOCX files, then use agentic workflows to understand scope, shape your technology stack, and chat with citations grounded in your source material.
 
 ---
 

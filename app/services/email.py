@@ -35,43 +35,43 @@ async def _send(to: str, subject: str, html: str, text: str) -> None:
 
 
 async def send_password_reset_email(to: str, username: str, reset_url: str) -> None:
-    subject = "Reset your Project Copilot password"
+    subject = "Reset your Shiori password"
     text = (
         f"Hi {username},\n\n"
-        "Someone (hopefully you) requested a password reset for your Project Copilot account.\n\n"
+        "Someone (hopefully you) requested a password reset for your Shiori account.\n\n"
         f"Reset your password: {reset_url}\n\n"
         f"This link expires in {settings.password_reset_ttl_minutes} minutes.\n\n"
         "If you didn't request this, ignore this email; your password won't change.\n\n"
-        "— Project Copilot"
+        "— Shiori"
     )
     html = f"""<!DOCTYPE html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.5; color: #222;">
   <p>Hi {username},</p>
-  <p>Someone (hopefully you) requested a password reset for your Project Copilot account.</p>
+  <p>Someone (hopefully you) requested a password reset for your Shiori account.</p>
   <p><a href="{reset_url}" style="display: inline-block; padding: 10px 16px; background: #111; color: #fff; text-decoration: none; border-radius: 6px;">Reset your password</a></p>
   <p style="color: #666; font-size: 14px;">Or copy this link: <br><a href="{reset_url}">{reset_url}</a></p>
   <p style="color: #666; font-size: 14px;">This link expires in {settings.password_reset_ttl_minutes} minutes.</p>
   <p style="color: #666; font-size: 14px;">If you didn't request this, ignore this email — your password won't change.</p>
-  <p style="color: #999; font-size: 12px;">— Project Copilot</p>
+  <p style="color: #999; font-size: 12px;">— Shiori</p>
 </body></html>"""
     await _send(to, subject, html, text)
 
 
 async def send_verification_email(to: str, username: str, verify_url: str) -> None:
-    subject = "Verify your Project Copilot email"
+    subject = "Verify your Shiori email"
     text = (
         f"Hi {username},\n\n"
-        "Welcome to Project Copilot. Please verify your email address:\n\n"
+        "Welcome to Shiori. Please verify your email address:\n\n"
         f"{verify_url}\n\n"
-        "— Project Copilot"
+        "— Shiori"
     )
     html = f"""<!DOCTYPE html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.5; color: #222;">
   <p>Hi {username},</p>
-  <p>Welcome to Project Copilot. Please verify your email address:</p>
+  <p>Welcome to Shiori. Please verify your email address:</p>
   <p><a href="{verify_url}" style="display: inline-block; padding: 10px 16px; background: #111; color: #fff; text-decoration: none; border-radius: 6px;">Verify email</a></p>
   <p style="color: #666; font-size: 14px;">Or copy this link: <br><a href="{verify_url}">{verify_url}</a></p>
-  <p style="color: #999; font-size: 12px;">— Project Copilot</p>
+  <p style="color: #999; font-size: 12px;">— Shiori</p>
 </body></html>"""
     await _send(to, subject, html, text)
 
@@ -82,18 +82,18 @@ async def send_admin_signup_email(
     username: str,
     approve_url: str,
 ) -> None:
-    subject = f"Project Copilot: Approve signup for {user_email}"
+    subject = f"Shiori: Approve signup for {user_email}"
     text = (
-        f"A new user requested access to Project Copilot.\n\n"
+        f"A new user requested access to Shiori.\n\n"
         f"Username: {username}\n"
         f"Email: {user_email}\n\n"
         f"Approve this account:\n{approve_url}\n\n"
         f"This link expires in {settings.admin_approval_ttl_days} days.\n\n"
-        "— Project Copilot"
+        "— Shiori"
     )
     html = f"""<!DOCTYPE html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.5; color: #222;">
-  <p>A new user requested access to <strong>Project Copilot</strong>.</p>
+  <p>A new user requested access to <strong>Shiori</strong>.</p>
   <ul>
     <li><strong>Username:</strong> {username}</li>
     <li><strong>Email:</strong> {user_email}</li>
@@ -101,24 +101,24 @@ async def send_admin_signup_email(
   <p><a href="{approve_url}" style="display: inline-block; padding: 10px 16px; background: #111; color: #fff; text-decoration: none; border-radius: 6px;">Approve account</a></p>
   <p style="color: #666; font-size: 14px;">Or copy this link:<br><a href="{approve_url}">{approve_url}</a></p>
   <p style="color: #666; font-size: 14px;">Expires in {settings.admin_approval_ttl_days} days.</p>
-  <p style="color: #999; font-size: 12px;">— Project Copilot</p>
+  <p style="color: #999; font-size: 12px;">— Shiori</p>
 </body></html>"""
     await _send(admin_to, subject, html, text)
 
 
 async def send_account_approved_email(to: str, username: str, login_url: str) -> None:
-    subject = "Your Project Copilot account has been approved"
+    subject = "Your Shiori account has been approved"
     text = (
         f"Hi {username},\n\n"
-        "Your Project Copilot account has been approved. You can now sign in:\n\n"
+        "Your Shiori account has been approved. You can now sign in:\n\n"
         f"{login_url}\n\n"
-        "— Project Copilot"
+        "— Shiori"
     )
     html = f"""<!DOCTYPE html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.5; color: #222;">
   <p>Hi {username},</p>
-  <p>Your Project Copilot account has been <strong>approved</strong>. You can now sign in and use the app.</p>
+  <p>Your Shiori account has been <strong>approved</strong>. You can now sign in and use the app.</p>
   <p><a href="{login_url}" style="display: inline-block; padding: 10px 16px; background: #111; color: #fff; text-decoration: none; border-radius: 6px;">Sign in</a></p>
-  <p style="color: #999; font-size: 12px;">— Project Copilot</p>
+  <p style="color: #999; font-size: 12px;">— Shiori</p>
 </body></html>"""
     await _send(to, subject, html, text)

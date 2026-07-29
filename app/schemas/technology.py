@@ -12,6 +12,8 @@ class TechnologyCatalogItemResponse(BaseModel):
     category: TechnologyCategory
     docs_url: str
     icon_slug: str
+    summary: str
+    usage_hint: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -24,6 +26,8 @@ class ProjectTechnologyResponse(BaseModel):
     category: TechnologyCategory
     docs_url: str
     icon_slug: str
+    summary: str
+    usage_hint: str
     source: TechnologySource
     rationale: str | None = None
     sort_order: int
@@ -40,5 +44,6 @@ class ProjectTechnologyCreate(BaseModel):
 
 class TechnologyStackResponse(BaseModel):
     categories: dict[str, list[ProjectTechnologyResponse]]
+    category_descriptions: dict[str, str] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)

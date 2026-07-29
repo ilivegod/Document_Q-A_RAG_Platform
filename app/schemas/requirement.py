@@ -46,11 +46,20 @@ class RequirementUpdate(BaseModel):
     assumptions: list[str] | None = None
 
 
+class ExtractMergeSummaryResponse(BaseModel):
+    added: int = 0
+    updated: int = 0
+    preserved: int = 0
+
+
 class ExtractRequirementsResponse(BaseModel):
     requirements: list[RequirementResponse]
     open_questions: list[RequirementResponse]
     ambiguities: list[str]
     contradictions: list[str]
+    merge: ExtractMergeSummaryResponse = Field(
+        default_factory=ExtractMergeSummaryResponse
+    )
 
 
 class RequirementsListResponse(BaseModel):

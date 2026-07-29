@@ -8,6 +8,7 @@ from app.models.requirement import (
     Requirement,
     RequirementCategory,
     RequirementPriority,
+    RequirementStatus,
 )
 from app.schemas.requirement import RequirementResponse, SourceRef
 
@@ -41,7 +42,11 @@ async def list_working_requirements(
     db: AsyncSession,
     project_id: UUID,
 ) -> tuple[list[Requirement], list[Requirement]]:
-    """Return (requirements, open_questions) for the project."""
+    """Return (requirements, unresolved open questions) for the project.
+
+    Resolved/dismissed open questions (confirmed/rejected) are excluded from
+    the open_questions list so they no longer block progress.
+    """
     result = await db.execute(
         select(Requirement)
         .where(Requirement.project_id == project_id)
@@ -49,7 +54,12 @@ async def list_working_requirements(
     )
     rows = result.scalars().all()
     requirements = [r for r in rows if r.category != RequirementCategory.OPEN_QUESTION]
-    open_questions = [r for r in rows if r.category == RequirementCategory.OPEN_QUESTION]
+    open_questions = [
+        r
+        for r in rows
+        if r.category == RequirementCategory.OPEN_QUESTION
+        and r.status == RequirementStatus.PROPOSED
+    ]
     return requirements, open_questions
 
 

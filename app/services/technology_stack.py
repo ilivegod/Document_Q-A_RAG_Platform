@@ -27,6 +27,7 @@ from app.services.llm_errors import raise_llm_http_error
 from app.services.project_access import get_project_or_404
 from app.services.requirements import list_working_requirements
 from app.services.technology_catalog import (
+    CATEGORY_DESCRIPTIONS,
     CATEGORY_LABELS,
     CATEGORY_ORDER,
     get_catalog_item,
@@ -72,6 +73,8 @@ def _to_response(row: ProjectTechnology) -> ProjectTechnologyResponse:
         category=row.category,
         docs_url=catalog.docs_url,
         icon_slug=catalog.icon_slug,
+        summary=catalog.summary,
+        usage_hint=catalog.usage_hint,
         source=row.source,
         rationale=row.rationale,
         sort_order=row.sort_order,
@@ -97,11 +100,16 @@ async def list_project_stack(
     )
     items = [_to_response(row) for row in result.scalars().all()]
     grouped: dict[str, list[ProjectTechnologyResponse]] = {}
+    category_descriptions: dict[str, str] = {}
     for category in CATEGORY_ORDER:
         category_items = [item for item in items if item.category == category]
         if category_items:
             grouped[category.value] = category_items
-    return TechnologyStackResponse(categories=grouped)
+            category_descriptions[category.value] = CATEGORY_DESCRIPTIONS[category]
+    return TechnologyStackResponse(
+        categories=grouped,
+        category_descriptions=category_descriptions,
+    )
 
 
 async def add_technology_to_stack(
@@ -194,7 +202,8 @@ practical technology stack for their project.
 
 Given the project requirements below, select technologies ONLY from the allowed catalog IDs.
 Pick 6-12 technologies that best fit the project across relevant categories.
-Each entry must use a valid catalog_id and a short rationale (1 sentence).
+Each entry must use a valid catalog_id and a short project-specific rationale (1 sentence)
+explaining why this technology fits the requirements — not generic marketing copy.
 
 Allowed catalog IDs by category:
 {allowed}
@@ -266,6 +275,8 @@ def search_technology_catalog(query: str) -> list[TechnologyCatalogItemResponse]
             category=item.category,
             docs_url=item.docs_url,
             icon_slug=item.icon_slug,
+            summary=item.summary,
+            usage_hint=item.usage_hint,
         )
         for item in search_catalog(query)
     ]

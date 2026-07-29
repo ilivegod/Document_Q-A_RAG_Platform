@@ -7,6 +7,7 @@ from app.database import get_db
 from app.dependencies.getUser import get_current_user
 from app.models.user import User
 from app.schemas.requirement import (
+    ExtractMergeSummaryResponse,
     ExtractRequirementsResponse,
     RequirementResponse,
     RequirementUpdate,
@@ -43,8 +44,8 @@ async def extract_requirements(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    created, ambiguities, contradictions = await extract_requirements_for_project(
-        db, current_user.id, project_id
+    _touched, ambiguities, contradictions, summary = (
+        await extract_requirements_for_project(db, current_user.id, project_id)
     )
     requirements, open_questions = await list_working_requirements(db, project_id)
     return ExtractRequirementsResponse(
@@ -52,6 +53,11 @@ async def extract_requirements(
         open_questions=[requirement_to_response(q) for q in open_questions],
         ambiguities=ambiguities,
         contradictions=contradictions,
+        merge=ExtractMergeSummaryResponse(
+            added=summary.added,
+            updated=summary.updated,
+            preserved=summary.preserved,
+        ),
     )
 
 
