@@ -38,11 +38,10 @@ async def _get_conversation_or_404(
 async def get_conversation(
     document_id: UUID | None = None,
     project_id: UUID | None = None,
-    global_chat: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get conversation for a document, project memory chat, or legacy global chat."""
+    """Get conversation for a document or project-scoped chat."""
     if project_id is not None and document_id is None:
         from app.services.project_access import get_project_or_404
 
@@ -56,20 +55,10 @@ async def get_conversation(
         )
         return result.scalar_one_or_none()
 
-    if global_chat:
-        result = await db.execute(
-            select(Conversation).where(
-                Conversation.user_id == current_user.id,
-                Conversation.document_id.is_(None),
-                Conversation.project_id.is_(None),
-            )
-        )
-        return result.scalar_one_or_none()
-
     if document_id is None:
         raise HTTPException(
             status_code=400,
-            detail="Provide document_id, project_id, or global_chat=true",
+            detail="Provide document_id or project_id",
         )
 
     doc = await db.execute(

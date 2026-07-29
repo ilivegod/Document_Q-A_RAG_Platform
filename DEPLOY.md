@@ -43,7 +43,7 @@ The document agent can delegate to a **web-research sub-agent** via stdio MCP se
 ### Environment variables
 
 ```env
-MCP_WEB_ENABLED=true
+MCP_WEB_ENABLED=false
 MCP_DDG_COMMAND=python
 MCP_DDG_ARGS=-m,duckduckgo_mcp.server
 MCP_WIKI_COMMAND=npx
@@ -52,7 +52,7 @@ MCP_TOOL_TIMEOUT_SECONDS=45
 WEB_RESEARCH_MAX_RESULTS=5
 ```
 
-Set `MCP_WEB_ENABLED=false` to disable web search; the agent continues document-only.
+Web research is **off by default**. Set `MCP_WEB_ENABLED=true` only when you explicitly want the agent to use Wikipedia/DuckDuckGo as a supplement to project documents.
 
 ### Rate limits
 
@@ -60,8 +60,8 @@ Web research is capped at **10 calls per user per day** (Redis-backed).
 
 ### Manual smoke test checklist
 
-1. Ensure `MCP_WEB_ENABLED=true` and Node/npm are available in the API container.
-2. Ask the agent: *"Who is Ada Lovelace according to Wikipedia?"*
+1. Set `MCP_WEB_ENABLED=true` and ensure Node/npm are available in the API container.
+2. In a **project** chat, ask something that needs the open web (not covered by uploads).
 3. Confirm agent trace shows a `web_research` step.
 4. Confirm answer cites `[W1]` and sources panel shows **Internet · Wikipedia** with an external link.
 5. Ask a document-specific question and confirm answers still cite `[D1]` from uploads when docs have the answer.

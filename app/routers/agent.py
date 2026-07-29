@@ -31,6 +31,12 @@ async def _get_or_create_conversation(
     document_id: UUID | None,
     project_id: UUID | None = None,
 ) -> Conversation:
+    if document_id is None and project_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide document_id or project_id for chat",
+        )
+
     if document_id is not None:
         result = await db.execute(
             select(Conversation).where(
@@ -38,20 +44,12 @@ async def _get_or_create_conversation(
                 Conversation.document_id == document_id,
             )
         )
-    elif project_id is not None:
+    else:
         result = await db.execute(
             select(Conversation).where(
                 Conversation.user_id == user_id,
                 Conversation.project_id == project_id,
                 Conversation.document_id.is_(None),
-            )
-        )
-    else:
-        result = await db.execute(
-            select(Conversation).where(
-                Conversation.user_id == user_id,
-                Conversation.document_id.is_(None),
-                Conversation.project_id.is_(None),
             )
         )
     conv = result.scalar_one_or_none()
@@ -141,6 +139,11 @@ async def _run_agent_query(
     current_user: User,
 ) -> AgentQueryResponse:
     user_id = current_user.id
+    if body.document_id is None and body.project_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Chat requires a project_id or document_id",
+        )
     project_id = await _resolve_project_id(
         db, user_id, body.document_id, body.project_id
     )

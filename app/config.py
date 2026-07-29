@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     api_public_url: str = "http://localhost:8000"
 
     # MCP web research (DuckDuckGo + Wikipedia stdio servers)
-    mcp_web_enabled: bool = True
+    mcp_web_enabled: bool = False
     mcp_ddg_command: str = "python"
     mcp_ddg_args: str = "-m,duckduckgo_mcp.server"
     mcp_wiki_command: str = "wiki-mcp"

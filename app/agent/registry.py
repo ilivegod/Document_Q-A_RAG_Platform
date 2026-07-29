@@ -36,12 +36,18 @@ TIER_GATED_PRO_TOOLS = ALL_TOOLS
 def tools_for_tier(tier: UserTier) -> set[str]:
     """Closed beta: full tool set for every approved user."""
     if settings.closed_beta_enabled:
-        return ALL_TOOLS
-    if tier == UserTier.BUSINESS:
-        return ALL_TOOLS
-    if tier == UserTier.PRO:
-        return TIER_GATED_PRO_TOOLS
-    return TIER_GATED_FREE_TOOLS
+        allowed = set(ALL_TOOLS)
+    elif tier == UserTier.BUSINESS:
+        allowed = set(ALL_TOOLS)
+    elif tier == UserTier.PRO:
+        allowed = set(TIER_GATED_PRO_TOOLS)
+    else:
+        allowed = set(TIER_GATED_FREE_TOOLS)
+
+    # Web research is opt-in via MCP_WEB_ENABLED — never in the default loop.
+    if not settings.mcp_web_enabled:
+        allowed.discard(WEB_RESEARCH)
+    return allowed
 
 
 def tier_allows_tool(tier: UserTier, tool_name: str) -> bool:

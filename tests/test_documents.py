@@ -141,11 +141,9 @@ async def test_document_isolation(auth_client: AsyncClient, client: AsyncClient)
 
 
 @pytest.mark.asyncio
-async def test_query_no_documents(auth_client: AsyncClient):
-    """Querying with no documents returns a graceful no-content response."""
+async def test_query_endpoint_removed(auth_client: AsyncClient):
+    """Legacy simple Q&A path is retired; use the document agent instead."""
     r = await auth_client.post("/documents/query", json={
         "question": "What is this about?",
     })
-    assert r.status_code == 200
-    data = r.json()
-    assert data["has_answer"] is False
+    assert r.status_code == 404

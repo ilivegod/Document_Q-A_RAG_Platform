@@ -20,7 +20,6 @@ init_sentry()
 from app.database import get_db
 from app.config import settings
 from app.routers.documents import router as documents_router
-from app.routers.query import router as query_router
 from app.routers.auth import router as auth_router
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.dependencies.rate_limit import limiter
@@ -48,7 +47,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(documents_router)
-app.include_router(query_router)
 app.include_router(auth_router)
 app.include_router(conversations_router)
 app.include_router(agent_router)

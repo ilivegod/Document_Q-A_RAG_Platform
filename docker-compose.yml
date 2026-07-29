@@ -42,7 +42,7 @@ services:
       CLOSED_BETA_ENABLED: ${CLOSED_BETA_ENABLED:-true}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:8000}
-      MCP_WEB_ENABLED: ${MCP_WEB_ENABLED:-true}
+      MCP_WEB_ENABLED: ${MCP_WEB_ENABLED:-false}
       MCP_DDG_COMMAND: ${MCP_DDG_COMMAND:-python}
       MCP_DDG_ARGS: ${MCP_DDG_ARGS:--m,duckduckgo_mcp.server}
       MCP_WIKI_COMMAND: ${MCP_WIKI_COMMAND:-wiki-mcp}

@@ -84,6 +84,7 @@ async def get_document(
     return {
         "id": str(doc.id),
         "user_id": str(doc.user_id),
+        "project_id": str(doc.project_id) if doc.project_id else None,
         "file_name": doc.file_name,
         "file_type": doc.file_type,
         "status": doc.status,

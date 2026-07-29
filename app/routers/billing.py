@@ -54,8 +54,8 @@ async def create_checkout(current_user: User = Depends(get_current_user)):
         session = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": settings.stripe_price_id_pro, "quantity": 1}],
-            success_url=f"{settings.frontend_url}/dashboard?upgraded=1",
-            cancel_url=f"{settings.frontend_url}/dashboard",
+            success_url=f"{settings.frontend_url}/projects?upgraded=1",
+            cancel_url=f"{settings.frontend_url}/projects",
             client_reference_id=str(current_user.id),
             customer_email=current_user.email,
             metadata={"user_id": str(current_user.id)},
