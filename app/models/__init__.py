@@ -11,3 +11,6 @@ from .task import Task
 from .decision import Decision
 from .activity_event import ActivityEvent
 from .plan_proposal import PlanProposal
+from .qa_run import QaCheckItem, QaRun
+from .release import Release
+from .handoff import Handoff
