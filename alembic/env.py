@@ -12,6 +12,11 @@ from app.models.document import Document
 from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.project_technology import ProjectTechnology
+from app.models.milestone import Milestone
+from app.models.task import Task
+from app.models.decision import Decision
+from app.models.activity_event import ActivityEvent
+from app.models.plan_proposal import PlanProposal
 from app.models.conversation import Conversation, Message
 
 from app.config import settings

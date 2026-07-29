@@ -6,3 +6,8 @@ from .conversation import Conversation, Message
 from .project import Project
 from .requirement import Requirement
 from .project_technology import ProjectTechnology
+from .milestone import Milestone
+from .task import Task
+from .decision import Decision
+from .activity_event import ActivityEvent
+from .plan_proposal import PlanProposal

@@ -30,6 +30,7 @@ from app.routers.billing import router as billing_router
 from app.routers.projects import router as projects_router
 from app.routers.requirements import router as requirements_router
 from app.routers.technology import router as technology_router
+from app.routers.execution import router as execution_router
 
 
 
@@ -54,6 +55,7 @@ app.include_router(billing_router)
 app.include_router(projects_router)
 app.include_router(requirements_router)
 app.include_router(technology_router)
+app.include_router(execution_router)
 
 app.add_middleware(ErrorHandlerMiddleware)
 
