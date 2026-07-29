@@ -4,7 +4,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timezone
 
 from app.database import get_db
 from app.dependencies.getUser import get_current_user
@@ -38,7 +37,6 @@ from app.services.execution import (
     ensure_requirement_in_project,
     get_decision_or_404,
     get_milestone_or_404,
-    get_proposal_or_404,
     get_task_or_404,
     list_activity,
     list_decisions,
@@ -430,7 +428,25 @@ async def create_activity_note(
     return activity_to_response(event)
 
 
-# --- Proposals (approval scaffold; apply logic comes later) ---
+# --- Proposals ---
+
+
+@router.post(
+    "/proposals/work-breakdown",
+    response_model=PlanProposalResponse,
+    status_code=201,
+)
+async def generate_work_breakdown(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.services.work_breakdown import generate_work_breakdown_proposal
+
+    proposal = await generate_work_breakdown_proposal(
+        db, current_user.id, project_id
+    )
+    return proposal_to_response(proposal)
 
 
 @router.get("/proposals", response_model=list[PlanProposalResponse])
@@ -478,35 +494,13 @@ async def decide_proposal(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await get_project_or_404(project_id, current_user.id, db)
-    row = await get_proposal_or_404(db, project_id, proposal_id)
+    from app.services.work_breakdown import decide_and_maybe_apply_proposal
 
-    if row.status != ProposalStatus.PENDING:
-        raise HTTPException(
-            status_code=400,
-            detail="Only pending proposals can be decided",
-        )
-    if body.status not in (
-        ProposalStatus.APPROVED,
-        ProposalStatus.REJECTED,
-        ProposalStatus.SUPERSEDED,
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Decision must be approved, rejected, or superseded",
-        )
-
-    row.status = body.status
-    row.decided_at = datetime.now(timezone.utc)
-    await record_activity(
+    proposal = await decide_and_maybe_apply_proposal(
         db,
+        current_user.id,
         project_id,
-        summary=f"Marked proposal “{row.title}” as {body.status.value}",
-        event_type="proposal.decided",
-        entity_type="proposal",
-        entity_id=row.id,
-        payload={"status": body.status.value},
+        proposal_id,
+        body.status,
     )
-    await db.commit()
-    await db.refresh(row)
-    return proposal_to_response(row)
+    return proposal_to_response(proposal)
