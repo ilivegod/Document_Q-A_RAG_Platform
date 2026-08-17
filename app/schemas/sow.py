@@ -59,6 +59,7 @@ class PublicPortalMetaResponse(BaseModel):
     client_name: str | None = None
     passcode_required: bool
     sow_status: str | None = None
+    can_submit_requests: bool = True
 
 
 class PublicSowResponse(BaseModel):

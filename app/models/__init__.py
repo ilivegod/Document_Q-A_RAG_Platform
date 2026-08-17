@@ -16,3 +16,4 @@ from .release import Release
 from .handoff import Handoff
 from .sow_document import SowDocument, SowGenerationStatus, SowStatus
 from .client_portal_access import ClientPortalAccess
+from .scope_change_request import ScopeChangeRequest, ScopeChangeStatus

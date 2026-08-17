@@ -10,6 +10,7 @@ from app.dependencies.rate_limit import limiter
 from app.models.activity_event import ActivityActor
 from app.models.project import PipelineStage
 from app.models.sow_document import SowStatus
+from app.schemas.scope_change import ScopeChangeSubmit, ScopeChangeSubmitResponse
 from app.schemas.sow import (
     PublicPortalMetaResponse,
     PublicSowResponse,
@@ -24,6 +25,10 @@ from app.services.portal_service import (
     portal_passcode_required,
     verify_portal_passcode,
 )
+from app.services.scope_change import (
+    scope_change_to_response,
+    submit_client_scope_change,
+)
 from app.services.sow_service import (
     get_latest_sow,
     get_sow_for_portal,
@@ -34,6 +39,7 @@ router = APIRouter(prefix="/public/portal", tags=["public-portal"])
 
 PORTAL_READ_LIMIT = "60/minute"
 PORTAL_ACCEPT_LIMIT = "10/hour"
+PORTAL_SCOPE_SUBMIT_LIMIT = "5/hour"
 
 
 def _tiers_to_public(sow) -> list[SowTierResponse]:
@@ -56,6 +62,7 @@ async def get_portal_meta(
         client_name=project.client_name,
         passcode_required=portal_passcode_required(access),
         sow_status=sow_status,
+        can_submit_requests=access.can_submit_requests,
     )
 
 
@@ -134,4 +141,43 @@ async def accept_public_sow(
         accepted_tier_key=body.tier_key,
         status=sow.status.value,
         message="Thank you — your selection has been recorded.",
+    )
+
+
+@router.post("/{token}/scope-changes", response_model=ScopeChangeSubmitResponse)
+@limiter.limit(PORTAL_SCOPE_SUBMIT_LIMIT)
+async def submit_public_scope_change(
+    request: Request,
+    token: str,
+    body: ScopeChangeSubmit,
+    db: AsyncSession = Depends(get_db),
+):
+    access = await get_portal_access_by_token(db, token)
+    if not access.can_submit_requests:
+        raise HTTPException(
+            status_code=403,
+            detail="Scope change submissions are disabled for this portal.",
+        )
+    if not verify_portal_passcode(access, body.passcode):
+        raise HTTPException(status_code=403, detail="Invalid or missing portal passcode")
+
+    project = await get_project_for_portal(db, access)
+    row = await submit_client_scope_change(
+        db,
+        project.id,
+        project.user_id,
+        body.description,
+    )
+    await db.commit()
+    await db.refresh(row)
+    response = scope_change_to_response(row)
+    label = "out of scope" if response.ai_is_out_of_scope else "in scope"
+    return ScopeChangeSubmitResponse(
+        id=response.id,
+        status=response.status,
+        ai_is_out_of_scope=response.ai_is_out_of_scope,
+        ai_reasoning=response.ai_reasoning,
+        estimated_hours=response.estimated_hours,
+        estimated_cost=response.estimated_cost,
+        message=f"Request received. Our team classified this as {label}.",
     )
