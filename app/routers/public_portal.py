@@ -10,6 +10,7 @@ from app.dependencies.rate_limit import limiter
 from app.models.activity_event import ActivityActor
 from app.models.project import PipelineStage
 from app.models.sow_document import SowStatus
+from app.schemas.agency import PublicDashboardResponse
 from app.schemas.scope_change import ScopeChangeSubmit, ScopeChangeSubmitResponse
 from app.schemas.sow import (
     PublicPortalMetaResponse,
@@ -25,6 +26,7 @@ from app.services.portal_service import (
     portal_passcode_required,
     verify_portal_passcode,
 )
+from app.services.portal_dashboard import get_client_dashboard
 from app.services.scope_change import (
     scope_change_to_response,
     submit_client_scope_change,
@@ -181,3 +183,16 @@ async def submit_public_scope_change(
         estimated_cost=response.estimated_cost,
         message=f"Request received. Our team classified this as {label}.",
     )
+
+
+@router.get("/{token}/dashboard", response_model=PublicDashboardResponse)
+@limiter.limit(PORTAL_READ_LIMIT)
+async def get_public_dashboard(
+    request: Request,
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    access = await get_portal_access_by_token(db, token)
+    project = await get_project_for_portal(db, access)
+    data = await get_client_dashboard(db, project.id, project.user_id)
+    return PublicDashboardResponse(**data)

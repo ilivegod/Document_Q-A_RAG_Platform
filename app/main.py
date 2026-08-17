@@ -34,6 +34,7 @@ from app.routers.delivery import router as delivery_router
 from app.routers.sow import router as sow_router
 from app.routers.public_portal import router as public_portal_router
 from app.routers.scope_changes import router as scope_changes_router
+from app.routers.agency import router as agency_router
 
 
 
@@ -62,6 +63,7 @@ app.include_router(delivery_router)
 app.include_router(sow_router)
 app.include_router(public_portal_router)
 app.include_router(scope_changes_router)
+app.include_router(agency_router)
 
 app.add_middleware(ErrorHandlerMiddleware)
 
