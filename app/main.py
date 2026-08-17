@@ -31,6 +31,8 @@ from app.routers.requirements import router as requirements_router
 from app.routers.technology import router as technology_router
 from app.routers.execution import router as execution_router
 from app.routers.delivery import router as delivery_router
+from app.routers.sow import router as sow_router
+from app.routers.public_portal import router as public_portal_router
 
 
 
@@ -56,6 +58,8 @@ app.include_router(requirements_router)
 app.include_router(technology_router)
 app.include_router(execution_router)
 app.include_router(delivery_router)
+app.include_router(sow_router)
+app.include_router(public_portal_router)
 
 app.add_middleware(ErrorHandlerMiddleware)
 
