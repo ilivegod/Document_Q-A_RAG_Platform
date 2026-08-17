@@ -70,3 +70,36 @@ def auto_analyze_project_task(self, document_id: str, project_id: str, user_id: 
             exc,
         )
         raise
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=2,
+    default_retry_delay=120,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
+def generate_sow_task(self, sow_document_id: str, user_id: str, project_id: str):
+    """Generate SOW tiers and labor estimates for a sow_documents row."""
+    from app.services.sow_generator import mark_sow_generation_failed, run_sow_generation
+
+    try:
+        asyncio.run(run_sow_generation(sow_document_id, user_id, project_id))
+    except Exception as exc:
+        attempt = self.request.retries + 1
+        logger.warning(
+            "SOW %s generation attempt %d failed: %s",
+            sow_document_id,
+            attempt,
+            exc,
+        )
+        if self.request.retries >= self.max_retries:
+            logger.error(
+                "SOW %s: exhausted %d retries, marking generation FAILED",
+                sow_document_id,
+                self.max_retries,
+            )
+            asyncio.run(mark_sow_generation_failed(sow_document_id))
+        raise
