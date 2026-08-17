@@ -26,6 +26,14 @@ class ProjectAnalysisStatus(str, Enum):
     COMPLETE = "complete"
 
 
+class PipelineStage(str, Enum):
+    LEAD = "lead"
+    PROPOSAL_SENT = "proposal_sent"
+    IN_DEVELOPMENT = "in_development"
+    QA_REVIEW = "qa_review"
+    HANDED_OFF = "handed_off"
+
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -72,6 +80,16 @@ class Project(Base):
         nullable=False,
     )
     last_analyzed_at = mapped_column(DateTime(timezone=True), nullable=True)
+    pipeline_stage: Mapped[PipelineStage] = mapped_column(
+        SQLEnum(
+            PipelineStage,
+            name="pipelinestage",
+            values_callable=_ENUM_VALUES,
+        ),
+        default=PipelineStage.LEAD,
+        nullable=False,
+        index=True,
+    )
     created_at = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

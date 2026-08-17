@@ -68,6 +68,9 @@ async def process_document(document_id: str) -> None:
                 logger.error(f"Document {document_id} not found")
                 raise PermanentProcessingError(f"Document {document_id} not found")
 
+            # Capture before commit — expired ORM attrs trigger async lazy loads.
+            project_id = doc.project_id
+            user_id = doc.user_id
             file_path = doc.file_path
             file_type = doc.file_type
 
@@ -124,9 +127,6 @@ async def process_document(document_id: str) -> None:
             doc.status = Document_Status.READY
             await db.commit()
             logger.info(f"Document {document_id}: status set to READY")
-
-            project_id = doc.project_id
-            user_id = doc.user_id
 
     except PermanentProcessingError:
         await _mark_failed(document_id)
