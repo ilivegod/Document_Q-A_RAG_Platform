@@ -22,6 +22,7 @@ from app.services.prospect_service import (
     cancel_prospect_search,
     get_active_prospect_search,
     get_prospect_or_404,
+    score_prospect_with_ai,
 )
 from app.workers.tasks import discover_prospects_task
 
@@ -102,6 +103,17 @@ async def create_prospect_search(
     return _search_to_response(search)
 
 
+@router.get("/prospecting/searches/active", response_model=ProspectSearchResponse | None)
+async def get_active_prospect_search_route(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    search = await get_active_prospect_search(current_user.id, db)
+    if search is None:
+        return None
+    return _search_to_response(search)
+
+
 @router.get("/prospecting/searches/{search_id}", response_model=ProspectSearchResponse)
 async def get_prospect_search(
     search_id: UUID,
@@ -111,17 +123,6 @@ async def get_prospect_search(
     search = await db.get(ProspectSearch, search_id)
     if not search or search.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Search not found")
-    return _search_to_response(search)
-
-
-@router.get("/prospecting/searches/active", response_model=ProspectSearchResponse | None)
-async def get_active_prospect_search_route(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    search = await get_active_prospect_search(current_user.id, db)
-    if search is None:
-        return None
     return _search_to_response(search)
 
 
@@ -165,6 +166,16 @@ async def get_prospect(
     current_user: User = Depends(get_current_user),
 ):
     prospect = await get_prospect_or_404(prospect_id, current_user.id, db)
+    return _prospect_to_response(prospect)
+
+
+@router.post("/prospects/{prospect_id}/score-with-ai", response_model=ProspectResponse)
+async def score_prospect_with_ai_route(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    prospect = await score_prospect_with_ai(prospect_id, current_user.id, db)
     return _prospect_to_response(prospect)
 
 

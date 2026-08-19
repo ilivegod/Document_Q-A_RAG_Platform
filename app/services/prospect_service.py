@@ -7,8 +7,9 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.config import settings
 from app.models.prospect import (
     Prospect,
     ProspectSearch,
@@ -23,9 +24,13 @@ from app.services.prospect_discovery import (
     fetch_place_candidates,
 )
 from app.services.prospect_fit import score_prospect_fit
+from app.services.prospect_fit_heuristic import score_prospect_fit_heuristic
 from app.services.website_audit import audit_website
 
 logger = logging.getLogger(__name__)
+
+STALE_PENDING_MINUTES = 2
+STALE_RUNNING_MINUTES = 10
 
 
 async def _append_progress(
@@ -55,232 +60,304 @@ async def _refresh_cancel_flag(db: AsyncSession, search_id: UUID) -> bool:
     return bool(row)
 
 
-async def run_prospect_discovery(search_id: str) -> None:
-    from app.database import async_session
-
-    async with async_session() as db:
-        search = await db.get(ProspectSearch, UUID(search_id))
-        if not search:
-            logger.error("Prospect search %s not found", search_id)
-            return
-
-        search.status = ProspectSearchStatus.RUNNING
-        search.progress_log = []
-        search.current_step = None
-        search.cancel_requested = False
+async def reconcile_stale_prospect_searches(user_id: UUID, db: AsyncSession) -> None:
+    """Mark abandoned searches failed so users can start a new one."""
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(ProspectSearch).where(
+            ProspectSearch.user_id == user_id,
+            ProspectSearch.status.in_(
+                [
+                    ProspectSearchStatus.PENDING,
+                    ProspectSearchStatus.RUNNING,
+                ]
+            ),
+        )
+    )
+    stale = False
+    for search in result.scalars().all():
+        created = search.created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        age_minutes = (now - created).total_seconds() / 60
+        if search.status == ProspectSearchStatus.PENDING and age_minutes > STALE_PENDING_MINUTES:
+            search.status = ProspectSearchStatus.FAILED
+            search.error_message = (
+                "Search did not start. Ensure the Celery worker is running and retry."
+            )
+            search.completed_at = now
+            stale = True
+        elif search.status == ProspectSearchStatus.RUNNING and age_minutes > STALE_RUNNING_MINUTES:
+            search.status = ProspectSearchStatus.FAILED
+            search.error_message = "Search timed out before completion."
+            search.completed_at = now
+            stale = True
+    if stale:
         await db.commit()
 
-        created = 0
 
-        try:
+async def mark_prospect_search_failed(search_id: str, error_message: str) -> None:
+    """Update search status using a fresh engine (safe for Celery retries)."""
+    engine = create_async_engine(settings.database_url)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with session_factory() as db:
+            search = await db.get(ProspectSearch, UUID(search_id))
+            if not search:
+                return
+            if search.status in (
+                ProspectSearchStatus.COMPLETE,
+                ProspectSearchStatus.CANCELLED,
+            ):
+                return
+            search.status = ProspectSearchStatus.FAILED
+            search.error_message = error_message[:2000]
+            search.completed_at = datetime.now(timezone.utc)
             await _append_progress(
                 db,
                 search,
-                f"Starting search for “{search.industry_keywords}” in {search.location_query}.",
-                "start",
+                f"Search failed: {error_message[:500]}",
+                "failed",
             )
+    finally:
+        await engine.dispose()
+
+
+async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str) -> None:
+    search = await db.get(ProspectSearch, UUID(search_id))
+    if not search:
+        logger.error("Prospect search %s not found", search_id)
+        return
+
+    search.status = ProspectSearchStatus.RUNNING
+    search.progress_log = []
+    search.current_step = None
+    search.cancel_requested = False
+    await db.commit()
+
+    created = 0
+
+    try:
+        await _append_progress(
+            db,
+            search,
+            f"Starting search for “{search.industry_keywords}” in {search.location_query}.",
+            "start",
+        )
+        await _append_progress(
+            db,
+            search,
+            f"Querying Google Places (up to {MAX_CANDIDATES} businesses)…",
+            "places_query",
+        )
+
+        candidates = await fetch_place_candidates(
+            search.location_query,
+            search.industry_keywords,
+            search.radius_km,
+        )
+
+        if not candidates:
             await _append_progress(
                 db,
                 search,
-                f"Querying Google Places (up to {MAX_CANDIDATES} businesses)…",
-                "places_query",
+                "No businesses found for this query.",
+                "no_results",
             )
+            search.status = ProspectSearchStatus.COMPLETE
+            search.result_count = 0
+            search.completed_at = datetime.now(timezone.utc)
+            await db.commit()
+            return
 
-            candidates = await fetch_place_candidates(
-                search.location_query,
-                search.industry_keywords,
-                search.radius_km,
-            )
+        await _append_progress(
+            db,
+            search,
+            f"Found {len(candidates)} candidate(s). Reviewing each business…",
+            "candidates_found",
+        )
 
-            if not candidates:
+        for index, candidate in enumerate(candidates, start=1):
+            if await _refresh_cancel_flag(db, search.id):
                 await _append_progress(
                     db,
                     search,
-                    "No businesses found for this query.",
-                    "no_results",
+                    f"Stop requested — finishing after {created} saved lead(s).",
+                    "cancelled",
                 )
-                search.status = ProspectSearchStatus.COMPLETE
-                search.result_count = 0
+                search.status = ProspectSearchStatus.CANCELLED
+                search.result_count = created
                 search.completed_at = datetime.now(timezone.utc)
                 await db.commit()
                 return
 
+            name_preview = candidate.get("business_name", "Business")
             await _append_progress(
                 db,
                 search,
-                f"Found {len(candidates)} candidate(s). Reviewing each business…",
-                "candidates_found",
+                f"[{index}/{len(candidates)}] Reviewing {name_preview}…",
+                "review_business",
             )
 
-            for index, candidate in enumerate(candidates, start=1):
-                if await _refresh_cancel_flag(db, search.id):
-                    await _append_progress(
-                        db,
-                        search,
-                        f"Stop requested — finishing after {created} saved lead(s).",
-                        "cancelled",
-                    )
-                    search.status = ProspectSearchStatus.CANCELLED
-                    search.result_count = created
-                    search.completed_at = datetime.now(timezone.utc)
-                    await db.commit()
-                    return
-
-                name_preview = candidate.get("business_name", "Business")
+            existing = await db.execute(
+                select(Prospect.id).where(
+                    Prospect.user_id == search.user_id,
+                    Prospect.place_id == candidate["place_id"],
+                )
+            )
+            if existing.scalar_one_or_none():
                 await _append_progress(
                     db,
                     search,
-                    f"[{index}/{len(candidates)}] Reviewing {name_preview}…",
-                    "review_business",
+                    f"Skipped {name_preview} — already in your lead list.",
+                    "skip_duplicate",
                 )
+                continue
 
-                existing = await db.execute(
-                    select(Prospect.id).where(
-                        Prospect.user_id == search.user_id,
-                        Prospect.place_id == candidate["place_id"],
-                    )
-                )
-                if existing.scalar_one_or_none():
-                    await _append_progress(
-                        db,
-                        search,
-                        f"Skipped {name_preview} — already in your lead list.",
-                        "skip_duplicate",
-                    )
-                    continue
+            await _append_progress(
+                db,
+                search,
+                f"Fetching details for {name_preview}…",
+                "place_details",
+            )
+            place = await enrich_place_candidate(
+                candidate["place_id"],
+                candidate["business_name"],
+                candidate.get("address"),
+            )
 
+            website_url = place.get("website_url")
+            await _append_progress(
+                db,
+                search,
+                f"Auditing website for {place['business_name']}…",
+                "website_audit",
+            )
+            audit = await audit_website(website_url)
+
+            if search.filter_no_website and audit.website_status != WebsiteStatus.NONE:
                 await _append_progress(
                     db,
                     search,
-                    f"Fetching details for {name_preview}…",
-                    "place_details",
+                    f"Skipped {place['business_name']} — has a website (filter: no website only).",
+                    "skip_filter",
                 )
-                place = await enrich_place_candidate(
-                    candidate["place_id"],
-                    candidate["business_name"],
-                    candidate.get("address"),
-                )
-
-                website_url = place.get("website_url")
+                continue
+            if search.filter_poor_website and audit.website_status not in (
+                WebsiteStatus.NONE,
+                WebsiteStatus.POOR,
+            ):
                 await _append_progress(
                     db,
                     search,
-                    f"Auditing website for {place['business_name']}…",
-                    "website_audit",
+                    f"Skipped {place['business_name']} — website not poor enough for filters.",
+                    "skip_filter",
                 )
-                audit = await audit_website(website_url)
+                continue
 
-                if search.filter_no_website and audit.website_status != WebsiteStatus.NONE:
-                    await _append_progress(
-                        db,
-                        search,
-                        f"Skipped {place['business_name']} — has a website (filter: no website only).",
-                        "skip_filter",
-                    )
-                    continue
-                if search.filter_poor_website and audit.website_status not in (
-                    WebsiteStatus.NONE,
-                    WebsiteStatus.POOR,
-                ):
-                    await _append_progress(
-                        db,
-                        search,
-                        f"Skipped {place['business_name']} — website not poor enough for filters.",
-                        "skip_filter",
-                    )
-                    continue
+            await _append_progress(
+                db,
+                search,
+                f"Extracting contact email for {place['business_name']}…",
+                "contact_extract",
+            )
+            contact_email = extract_contact_email_from_pages(
+                audit.homepage_html,
+                audit.contact_html or None,
+                website_url,
+            )
 
-                await _append_progress(
-                    db,
-                    search,
-                    f"Extracting contact email for {place['business_name']}…",
-                    "contact_extract",
-                )
-                contact_email = extract_contact_email_from_pages(
-                    audit.homepage_html,
-                    audit.contact_html or None,
-                    website_url,
-                )
+            await _append_progress(
+                db,
+                search,
+                f"Calculating fit score for {place['business_name']}…",
+                "fit_score",
+            )
+            fit = score_prospect_fit_heuristic(
+                business_name=place["business_name"],
+                industry_keywords=search.industry_keywords,
+                website_status=audit.website_status,
+                audit_signals=audit.audit_signals,
+            )
 
-                await _append_progress(
-                    db,
-                    search,
-                    f"Scoring fit for {place['business_name']} with AI…",
-                    "fit_score",
-                )
-                fit = await score_prospect_fit(
-                    business_name=place["business_name"],
-                    industry_keywords=search.industry_keywords,
-                    website_status=audit.website_status,
-                    audit_signals=audit.audit_signals,
-                    homepage_text=audit.homepage_text,
-                    niche_notes=search.niche_notes,
-                )
+            audit_payload = dict(audit.audit_signals or {})
+            if audit.homepage_text:
+                audit_payload["homepage_excerpt"] = audit.homepage_text[:2000]
 
-                prospect = Prospect(
-                    user_id=search.user_id,
-                    search_id=search.id,
-                    place_id=place["place_id"],
-                    business_name=place["business_name"],
-                    address=place.get("address"),
-                    phone=place.get("phone"),
-                    website_url=website_url,
-                    website_status=audit.website_status,
-                    audit_signals=audit.audit_signals,
-                    fit_score=fit.fit_score,
-                    fit_summary=fit.fit_summary,
-                    pitch_angle=fit.pitch_angle,
-                    contact_email=contact_email,
-                    status=ProspectStatus.NEW,
-                )
-                db.add(prospect)
-                created += 1
-                search.result_count = created
-                await db.commit()
-
-                await _append_progress(
-                    db,
-                    search,
-                    f"Added lead: {place['business_name']} (fit score {fit.fit_score}). "
-                    f"Total saved: {created}.",
-                    "lead_saved",
-                )
-
-                if await _refresh_cancel_flag(db, search.id):
-                    await _append_progress(
-                        db,
-                        search,
-                        f"Stop requested — search ended with {created} lead(s) saved.",
-                        "cancelled",
-                    )
-                    search.status = ProspectSearchStatus.CANCELLED
-                    search.completed_at = datetime.now(timezone.utc)
-                    await db.commit()
-                    return
-
-            search.status = ProspectSearchStatus.COMPLETE
+            prospect = Prospect(
+                user_id=search.user_id,
+                search_id=search.id,
+                place_id=place["place_id"],
+                business_name=place["business_name"],
+                address=place.get("address"),
+                phone=place.get("phone"),
+                website_url=website_url,
+                website_status=audit.website_status,
+                audit_signals=audit_payload,
+                fit_score=fit.fit_score,
+                fit_summary=fit.fit_summary,
+                pitch_angle=fit.pitch_angle or None,
+                contact_email=contact_email,
+                status=ProspectStatus.NEW,
+            )
+            db.add(prospect)
+            created += 1
             search.result_count = created
-            search.completed_at = datetime.now(timezone.utc)
-            search.error_message = None
+            await db.commit()
+
             await _append_progress(
                 db,
                 search,
-                f"Search complete — {created} lead(s) saved to your account.",
-                "complete",
+                f"Added lead: {place['business_name']} (fit score {fit.fit_score}). "
+                f"Total saved: {created}.",
+                "lead_saved",
             )
-        except Exception as exc:
-            logger.exception("Prospect search %s failed", search_id)
-            search = await db.get(ProspectSearch, UUID(search_id))
-            if search:
-                search.status = ProspectSearchStatus.FAILED
-                search.error_message = str(exc)[:2000]
-                search.completed_at = datetime.now(timezone.utc)
+
+            if await _refresh_cancel_flag(db, search.id):
                 await _append_progress(
                     db,
                     search,
-                    f"Search failed: {str(exc)[:500]}",
-                    "failed",
+                    f"Stop requested — search ended with {created} lead(s) saved.",
+                    "cancelled",
                 )
+                search.status = ProspectSearchStatus.CANCELLED
+                search.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+                return
+
+        search.status = ProspectSearchStatus.COMPLETE
+        search.result_count = created
+        search.completed_at = datetime.now(timezone.utc)
+        search.error_message = None
+        await _append_progress(
+            db,
+            search,
+            f"Search complete — {created} lead(s) saved to your account.",
+            "complete",
+        )
+    except Exception as exc:
+        logger.exception("Prospect search %s failed", search_id)
+        search.status = ProspectSearchStatus.FAILED
+        search.error_message = str(exc)[:2000]
+        search.completed_at = datetime.now(timezone.utc)
+        await _append_progress(
+            db,
+            search,
+            f"Search failed: {str(exc)[:500]}",
+            "failed",
+        )
+        raise
+
+
+async def run_prospect_discovery(search_id: str) -> None:
+    """Celery task entrypoint — uses a per-task DB engine (safe after worker fork)."""
+    engine = create_async_engine(settings.database_url)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with session_factory() as db:
+            await _run_prospect_discovery_with_session(db, search_id)
+    finally:
+        await engine.dispose()
 
 
 async def cancel_prospect_search(search_id: UUID, user_id: UUID, db: AsyncSession) -> ProspectSearch:
@@ -304,6 +381,7 @@ async def get_active_prospect_search(
     user_id: UUID,
     db: AsyncSession,
 ) -> ProspectSearch | None:
+    await reconcile_stale_prospect_searches(user_id, db)
     result = await db.execute(
         select(ProspectSearch)
         .where(
@@ -319,6 +397,47 @@ async def get_active_prospect_search(
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def score_prospect_with_ai(
+    prospect_id: UUID,
+    user_id: UUID,
+    db: AsyncSession,
+) -> Prospect:
+    """Optional LLM fit refresh — one Gemini call per user action."""
+    prospect = await get_prospect_or_404(prospect_id, user_id, db)
+    industry_keywords = "local business"
+    niche_notes = None
+    if prospect.search_id:
+        search = await db.get(ProspectSearch, prospect.search_id)
+        if search:
+            industry_keywords = search.industry_keywords
+            niche_notes = search.niche_notes
+
+    homepage_text = ""
+    if prospect.audit_signals and isinstance(
+        prospect.audit_signals.get("homepage_excerpt"), str
+    ):
+        homepage_text = prospect.audit_signals["homepage_excerpt"]
+    elif prospect.website_url:
+        audit = await audit_website(prospect.website_url)
+        homepage_text = audit.homepage_text
+
+    fit = await score_prospect_fit(
+        business_name=prospect.business_name,
+        industry_keywords=industry_keywords,
+        website_status=prospect.website_status,
+        audit_signals=prospect.audit_signals,
+        homepage_text=homepage_text,
+        niche_notes=niche_notes,
+    )
+
+    prospect.fit_score = fit.fit_score
+    prospect.fit_summary = fit.fit_summary
+    prospect.pitch_angle = fit.pitch_angle or None
+    await db.commit()
+    await db.refresh(prospect)
+    return prospect
 
 
 async def get_prospect_or_404(

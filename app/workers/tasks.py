@@ -113,10 +113,12 @@ def generate_sow_task(self, sow_document_id: str, user_id: str, project_id: str)
 )
 def discover_prospects_task(self, search_id: str):
     """Discover local businesses and score them as prospects."""
-    from app.services.prospect_service import run_prospect_discovery
+    from app.services.prospect_service import mark_prospect_search_failed, run_prospect_discovery
 
     try:
         asyncio.run(run_prospect_discovery(search_id))
     except Exception as exc:
         logger.warning("Prospect search %s attempt failed: %s", search_id, exc)
+        if self.request.retries >= self.max_retries:
+            asyncio.run(mark_prospect_search_failed(search_id, str(exc)))
         raise
