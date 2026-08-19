@@ -32,6 +32,9 @@ class ProspectSearchResponse(BaseModel):
     status: ProspectSearchStatus
     result_count: int
     error_message: str | None
+    cancel_requested: bool = False
+    current_step: str | None = None
+    progress_log: list[dict] = Field(default_factory=list)
     created_at: datetime
     completed_at: datetime | None
 

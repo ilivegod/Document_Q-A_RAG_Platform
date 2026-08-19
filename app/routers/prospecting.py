@@ -18,7 +18,11 @@ from app.schemas.prospect import (
     ProspectSearchResponse,
     ProspectUpdate,
 )
-from app.services.prospect_service import get_prospect_or_404
+from app.services.prospect_service import (
+    cancel_prospect_search,
+    get_active_prospect_search,
+    get_prospect_or_404,
+)
 from app.workers.tasks import discover_prospects_task
 
 router = APIRouter(tags=["prospecting"])
@@ -36,6 +40,9 @@ def _search_to_response(search: ProspectSearch) -> ProspectSearchResponse:
         status=search.status,
         result_count=search.result_count,
         error_message=search.error_message,
+        cancel_requested=search.cancel_requested,
+        current_step=search.current_step,
+        progress_log=list(search.progress_log or []),
         created_at=search.created_at,
         completed_at=search.completed_at,
     )
@@ -73,6 +80,12 @@ async def create_prospect_search(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    active = await get_active_prospect_search(current_user.id, db)
+    if active:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A lead search is already running. Stop it or wait for it to finish.",
+        )
     search = ProspectSearch(
         user_id=current_user.id,
         location_query=body.location_query,
@@ -98,6 +111,30 @@ async def get_prospect_search(
     search = await db.get(ProspectSearch, search_id)
     if not search or search.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Search not found")
+    return _search_to_response(search)
+
+
+@router.get("/prospecting/searches/active", response_model=ProspectSearchResponse | None)
+async def get_active_prospect_search_route(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    search = await get_active_prospect_search(current_user.id, db)
+    if search is None:
+        return None
+    return _search_to_response(search)
+
+
+@router.post(
+    "/prospecting/searches/{search_id}/cancel",
+    response_model=ProspectSearchResponse,
+)
+async def cancel_prospect_search_route(
+    search_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    search = await cancel_prospect_search(search_id, current_user.id, db)
     return _search_to_response(search)
 
 

@@ -27,6 +27,7 @@ class ProspectSearchStatus(str, Enum):
     RUNNING = "running"
     COMPLETE = "complete"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class WebsiteStatus(str, Enum):
@@ -114,6 +115,9 @@ class ProspectSearch(Base):
     )
     result_count = mapped_column(Integer, nullable=False, default=0)
     error_message = mapped_column(Text, nullable=True)
+    cancel_requested = mapped_column(Boolean, nullable=False, default=False)
+    current_step = mapped_column(String(500), nullable=True)
+    progress_log = mapped_column(JSONB, nullable=False, default=list)
     created_at = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
