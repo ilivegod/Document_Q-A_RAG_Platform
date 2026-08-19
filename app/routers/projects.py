@@ -19,7 +19,7 @@ from app.database import get_db
 from app.dependencies.getUser import get_current_user
 from app.dependencies.rate_limit import UPLOAD_LIMIT, get_user_id_key, limiter
 from app.models.document import Document
-from app.models.project import Project, ProjectAnalysisStatus
+from app.models.project import Project, ProjectAnalysisStatus, PipelineStage
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectAnalysisStatusResponse
 from app.services.project_access import (
@@ -49,6 +49,7 @@ def _project_to_response(project: Project, document_count: int) -> ProjectRespon
         client_name=project.client_name,
         project_type=project.project_type,
         status=project.status,
+        pipeline_stage=project.pipeline_stage,
         document_count=document_count,
         created_at=project.created_at,
         updated_at=project.updated_at,
@@ -137,6 +138,8 @@ async def update_project(
 ):
     project = await get_project_or_404(project_id, current_user.id, db)
     updates = body.model_dump(exclude_unset=True)
+    if "pipeline_stage" in updates and updates["pipeline_stage"] is not None:
+        project.pipeline_stage = updates.pop("pipeline_stage")
     for field, value in updates.items():
         setattr(project, field, value)
     await db.commit()

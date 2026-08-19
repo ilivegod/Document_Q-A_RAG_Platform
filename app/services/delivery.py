@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.activity_event import ActivityActor
 from app.models.handoff import Handoff, HandoffStatus
+from app.models.project import Project
 from app.models.qa_run import QaCheckItem, QaItemStatus, QaRun, QaRunStatus
 from app.models.release import Release, ReleaseStatus
 from app.models.requirement import RequirementStatus
@@ -27,6 +28,7 @@ from app.schemas.delivery import (
     QaRunResponse,
     ReleaseResponse,
 )
+from app.services.pipeline_stage import advance_to_handed_off, advance_to_qa_review
 from app.services.execution import list_decisions, list_tasks, record_activity
 from app.services.llm_errors import raise_llm_http_error
 from app.services.project_access import get_project_or_404
@@ -395,7 +397,7 @@ async def create_qa_run(
     notes: str | None = None,
     seed_from_requirements: bool = True,
 ) -> tuple[QaRun, list[QaCheckItem]]:
-    await get_project_or_404(project_id, user_id, db)
+    project = await get_project_or_404(project_id, user_id, db)
     run = QaRun(
         project_id=project_id,
         title=title.strip()[:500],
@@ -432,6 +434,7 @@ async def create_qa_run(
         entity_id=run.id,
         payload={"item_count": len(items)},
     )
+    advance_to_qa_review(project)
     await db.commit()
     await db.refresh(run)
     items = await list_qa_items(db, run.id)
@@ -458,6 +461,10 @@ async def update_qa_run(
             run.completed_at = datetime.now(timezone.utc)
         else:
             run.completed_at = None
+        if mapped == QaRunStatus.IN_PROGRESS:
+            project = await db.get(Project, project_id)
+            if project is not None:
+                advance_to_qa_review(project)
 
     await record_activity(
         db,
@@ -765,6 +772,9 @@ async def update_handoff(
         if mapped == HandoffStatus.FINAL and handoff.status != HandoffStatus.FINAL:
             handoff.status = HandoffStatus.FINAL
             handoff.finalized_at = datetime.now(timezone.utc)
+            project = await db.get(Project, project_id)
+            if project is not None:
+                advance_to_handed_off(project)
         elif mapped == HandoffStatus.DRAFT:
             handoff.status = HandoffStatus.DRAFT
             handoff.finalized_at = None

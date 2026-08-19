@@ -103,3 +103,20 @@ def generate_sow_task(self, sow_document_id: str, user_id: str, project_id: str)
             )
             asyncio.run(mark_sow_generation_failed(sow_document_id))
         raise
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=1,
+    default_retry_delay=60,
+    autoretry_for=(Exception,),
+)
+def discover_prospects_task(self, search_id: str):
+    """Discover local businesses and score them as prospects."""
+    from app.services.prospect_service import run_prospect_discovery
+
+    try:
+        asyncio.run(run_prospect_discovery(search_id))
+    except Exception as exc:
+        logger.warning("Prospect search %s attempt failed: %s", search_id, exc)
+        raise

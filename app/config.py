@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     web_research_max_results: int = 5
     web_research_limit: str = "10/day"
 
+    # Prospecting
+    google_places_api_key: str = ""
+    outreach_daily_send_limit: int = 20
+
     @property
     def mcp_ddg_args_list(self) -> list[str]:
         return [a.strip() for a in self.mcp_ddg_args.split(",") if a.strip()]

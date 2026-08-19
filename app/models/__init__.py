@@ -17,3 +17,14 @@ from .handoff import Handoff
 from .sow_document import SowDocument, SowGenerationStatus, SowStatus
 from .client_portal_access import ClientPortalAccess
 from .scope_change_request import ScopeChangeRequest, ScopeChangeStatus
+from .prospect import (
+    OutreachDomainStatus,
+    OutreachEmail,
+    OutreachEmailStatus,
+    Prospect,
+    ProspectSearch,
+    ProspectSearchStatus,
+    ProspectStatus,
+    UserOutreachSettings,
+    WebsiteStatus,
+)

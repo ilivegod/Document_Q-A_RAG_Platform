@@ -61,6 +61,7 @@ TIER_LIMITS = {
 UPLOAD_LIMIT = TIER_LIMITS["free"]["upload"]
 QUERY_LIMIT = TIER_LIMITS["free"]["query"]
 WEB_RESEARCH_LIMIT = "10/day"
+OUTREACH_SEND_LIMIT = f"{settings.outreach_daily_send_limit}/day"
 
 
 def get_upload_limit_for_tier(tier: UserTier | str) -> str:
