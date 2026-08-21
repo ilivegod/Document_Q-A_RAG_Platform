@@ -10,6 +10,7 @@ from app.database import get_db
 from app.dependencies.getUser import get_current_user
 from app.models.project import PipelineStage, Project, ProjectType
 from app.models.prospect import Prospect, ProspectSearch, ProspectStatus
+from app.services.company_brief import seed_company_brief_document
 from app.models.user import User
 from app.schemas.prospect import (
     PlaceAutocompleteSuggestion,
@@ -260,9 +261,17 @@ async def convert_prospect(
         description=prospect.fit_summary,
         project_type=ProjectType.CLIENT,
         pipeline_stage=PipelineStage.LEAD,
+        prospect_id=prospect.id,
     )
     db.add(project)
     await db.flush()
+
+    await seed_company_brief_document(
+        db,
+        user_id=current_user.id,
+        project_id=project.id,
+        prospect=prospect,
+    )
 
     prospect.project_id = project.id
     prospect.status = ProspectStatus.CONVERTED

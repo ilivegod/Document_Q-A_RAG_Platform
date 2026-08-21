@@ -90,6 +90,12 @@ class Project(Base):
         nullable=False,
         index=True,
     )
+    prospect_id = mapped_column(
+        UUID,
+        ForeignKey("prospects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

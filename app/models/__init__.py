@@ -17,6 +17,7 @@ from .handoff import Handoff
 from .sow_document import SowDocument, SowGenerationStatus, SowStatus
 from .client_portal_access import ClientPortalAccess
 from .scope_change_request import ScopeChangeRequest, ScopeChangeStatus
+from .sales_proposal import SalesProposal, SalesProposalStatus
 from .prospect import (
     OutreachDomainStatus,
     OutreachEmail,

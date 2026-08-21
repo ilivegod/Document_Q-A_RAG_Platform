@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from uuid import UUID
+
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -121,4 +123,44 @@ def discover_prospects_task(self, search_id: str):
         logger.warning("Prospect search %s attempt failed: %s", search_id, exc)
         if self.request.retries >= self.max_retries:
             asyncio.run(mark_prospect_search_failed(search_id, str(exc)))
+        raise
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=2,
+    default_retry_delay=90,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
+def research_sales_proposal_task(self, proposal_id: str):
+    """Research company context and suggest proposal type."""
+    from app.services.sales_proposal import run_proposal_research_job
+
+    try:
+        asyncio.run(run_proposal_research_job(UUID(proposal_id)))
+    except Exception as exc:
+        logger.warning("Sales proposal research %s failed: %s", proposal_id, exc)
+        raise
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=2,
+    default_retry_delay=90,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
+def draft_sales_proposal_task(self, proposal_id: str, is_revision: bool = False):
+    """Generate or revise proposal markdown draft."""
+    from app.services.sales_proposal import run_proposal_draft_job
+
+    try:
+        asyncio.run(run_proposal_draft_job(UUID(proposal_id), is_revision=is_revision))
+    except Exception as exc:
+        logger.warning("Sales proposal draft %s failed: %s", proposal_id, exc)
         raise

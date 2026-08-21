@@ -41,6 +41,8 @@ def parse_document_from_path(file_path: str, file_type: str):
         return _parse_pdf(file_path)
     elif file_type == ".docx":
         return _parse_docx(file_path)
+    elif file_type in (".md", ".txt", ".markdown"):
+        return _parse_plain_text(file_path)
     else:
         logger.error(f"parse_document_from_path: unsupported file type {file_type}")
         return None
@@ -108,6 +110,25 @@ def _parse_docx(file_path: str):
         })
 
     # Single virtual page
+    return [{
+        "page_num": 0,
+        "page_width": None,
+        "page_height": None,
+        "spans": spans,
+    }]
+
+
+def _parse_plain_text(file_path: str):
+    """Parse markdown or plain text as a single virtual page."""
+    with open(file_path, encoding="utf-8") as handle:
+        content = handle.read()
+    spans = []
+    for line in content.splitlines():
+        cleaned = line.strip()
+        if cleaned:
+            spans.append({"text": cleaned, "bbox": None})
+    if not spans and content.strip():
+        spans.append({"text": content.strip(), "bbox": None})
     return [{
         "page_num": 0,
         "page_width": None,
