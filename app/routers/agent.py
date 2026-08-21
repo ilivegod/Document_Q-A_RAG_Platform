@@ -16,7 +16,7 @@ from app.dependencies.rate_limit import QUERY_LIMIT, get_user_id_key, limiter
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.document import Document
 from app.models.user import User
-from app.schemas.agent import AgentQueryRequest, AgentQueryResponse, AgentStep
+from app.schemas.agent import AgentQueryRequest, AgentQueryResponse, AgentStep, SuggestedAction
 from app.mcp.schemas import WebFinding
 from app.schemas.query import Source
 router = APIRouter()
@@ -175,7 +175,7 @@ async def _run_agent_query(
     if conversation_id is not None:
         history = await _fetch_history(db, conversation_id)
 
-    llm_answer, agent_trace, chunks, web_findings = await run_agent(
+    llm_answer, agent_trace, chunks, web_findings, suggested_actions = await run_agent(
         question=body.question,
         ctx=ctx,
         tier=current_user.tier,
@@ -187,7 +187,8 @@ async def _run_agent_query(
         if llm_answer.has_answer and (chunks or web_findings)
         else []
     )
-    steps = [AgentStep(**s) for s in agent_trace]
+    steps = [AgentStep(**s) for s in agent_trace if s.get("tool") != "suggested_actions"]
+    action_models = [SuggestedAction(**a) for a in suggested_actions]
 
     if conversation_id is not None:
         db.add(
@@ -221,6 +222,7 @@ async def _run_agent_query(
         sources=sources,
         conversation_id=conversation_id,
         agent_steps=steps,
+        suggested_actions=action_models,
     )
 
 
@@ -264,7 +266,7 @@ async def _stream_agent_events(
 
     yield f"data: {json.dumps({'type': 'start', 'conversation_id': str(conversation_id)})}\n\n"
 
-    llm_answer, agent_trace, chunks, web_findings = await run_agent(
+    llm_answer, agent_trace, chunks, web_findings, suggested_actions = await run_agent(
         question=body.question,
         ctx=ctx,
         tier=current_user.tier,
@@ -272,6 +274,8 @@ async def _stream_agent_events(
     )
 
     for step in agent_trace:
+        if step.get("tool") == "suggested_actions":
+            continue
         yield f"data: {json.dumps({'type': 'tool_step', 'step': step})}\n\n"
 
     sources = (
@@ -294,7 +298,8 @@ async def _stream_agent_events(
         "has_answer": llm_answer.has_answer,
         "sources": [s.model_dump() for s in sources],
         "conversation_id": str(conversation_id),
-        "agent_steps": agent_trace,
+        "agent_steps": [s for s in agent_trace if s.get("tool") != "suggested_actions"],
+        "suggested_actions": suggested_actions,
     }
     yield f"data: {json.dumps(payload)}\n\n"
 

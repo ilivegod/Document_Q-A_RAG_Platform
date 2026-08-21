@@ -13,6 +13,11 @@ from app.agent.registry import (
     SEARCH_DOCUMENTS,
     WEB_RESEARCH,
 )
+from app.agent.project_context import format_project_client_context
+from app.agent.suggested_actions import (
+    ProjectAgentAnswer,
+    attach_suggested_actions,
+)
 from app.agent.trace_utils import public_agent_trace, resolve_follow_up_question
 from app.agent.tools.handlers import build_args_schema, build_tool_specs, execute_tool
 from app.config import settings
@@ -50,6 +55,29 @@ and [W1], [W2] for internet sources only when web_research supplemented document
 Never invent facts not supported by tool results.
 """
 
+PROJECT_AGENT_SYSTEM = """You are Shiori, an agency project assistant helping win and scope client work.
+
+You help the user think through what a client business needs — website, SEO, branding, etc.
+Use project documents (company brief, proposals) via search_documents when relevant.
+Use list_user_documents to see what exists.
+
+Conversation style:
+- Talk naturally. Ask clarifying questions when the user's direction is vague.
+- Ground advice in lead data, audit signals, and uploaded documents when available.
+- Do NOT tell the user to click a separate button or use a special command.
+- When the user has explained what the client should have, your final reply will offer
+  approve-able draft actions (proposal, report, etc.) — you describe the plan in prose;
+  the UI shows approval buttons separately. Drafts use only the chat, lead data, and
+  project documents — never web research.
+
+Tools (same as document chat):
+- search_documents, keyword_search, list_user_documents for project files
+- web_research only to supplement document findings
+- get_page_content only in single-document chat (not used here)
+
+Never invent client facts not in tools or project context.
+"""
+
 OFF_TOPIC_DOCUMENT_ONLY = (
     "I only answer questions based on your uploaded project documents. "
     "Ask me something about your files."
@@ -79,6 +107,28 @@ Document questions without enough context:
 Web context usage:
 - Only use internet citations [W1], [W2] when web results supplement something from the user's documents.
 - Do not answer general off-topic questions even if web context appears below.
+"""
+
+PROJECT_FINAL_ANSWER_RULES = """You are Shiori, an agency project assistant.
+
+Respond conversationally about the client and what they need. Use [D1], [D2] when citing project documents.
+
+Suggested actions (include in suggested_actions ONLY when appropriate):
+- draft_proposal: User wants a client proposal written. Summarize their scope/deliverables in user_intent.
+  Drafting uses ONLY the conversation, linked lead data, and project documents — no internet research.
+- draft_document: User wants another markdown deliverable (report, brief, scope note). Same rules as draft_proposal.
+- start_proposal_research: Legacy alias — treat same as draft_proposal.
+
+Rules for suggested_actions:
+- At most 1–2 actions per reply.
+- label: short button text (e.g. "Draft website proposal", "Draft project report")
+- description: one sentence — what you will write, based on what they told you
+- user_intent: required — concise summary of scope, deliverables, and client details FROM THE CHAT
+- If the user is still brainstorming, suggested_actions must be empty.
+- If user asks to write/draft now and has given enough detail, include the appropriate draft action.
+- Do NOT suggest if project context says a draft workflow is already in progress.
+
+Set has_answer=True for normal project discussion. Only False for pure off-topic (weather, jokes).
 """
 
 
@@ -246,6 +296,56 @@ Question: {question}
         raise
 
 
+async def _synthesize_project_answer(
+    question: str,
+    doc_context: str,
+    web_context: str,
+    chat_history: list[dict] | None,
+    agent_trace: list[dict],
+    client_context: str,
+    project_memory: str = "",
+) -> ProjectAgentAnswer:
+    final_model = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash-lite",
+        google_api_key=settings.google_api_key,
+    ).with_structured_output(ProjectAgentAnswer)
+
+    history_text = ""
+    if chat_history:
+        lines = [f"{m['role'].capitalize()}: {m['content']}" for m in chat_history]
+        history_text = "\n".join(lines)
+
+    context_sections = [f"Client & workflow:\n{client_context}"]
+    if project_memory:
+        context_sections.append(f"Requirements & stack:\n{project_memory}")
+    if doc_context:
+        context_sections.append(f"Document context:\n{doc_context}")
+    if web_context:
+        context_sections.append(f"Internet context:\n{web_context}")
+
+    trace_summary = _format_agent_trace_summary(agent_trace)
+
+    prompt_text = f"""{PROJECT_FINAL_ANSWER_RULES}
+
+{chr(10).join(context_sections)}
+
+Tool activity:
+{trace_summary}
+
+{f"Previous conversation:\n{history_text}\n" if history_text else ""}
+Question: {question}
+"""
+    try:
+        return await final_model.ainvoke(prompt_text)
+    except Exception as e:
+        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+            return ProjectAgentAnswer(
+                has_answer=False,
+                answer="Rate limited. Please try again shortly.",
+            )
+        raise
+
+
 def _format_web_context(findings: list[WebFinding]) -> str:
     if not findings:
         return ""
@@ -263,11 +363,12 @@ async def run_agent(
     ctx: AgentContext,
     tier: UserTier,
     chat_history: list[dict] | None = None,
-) -> tuple[LLMAnswer, list[dict], list, list[WebFinding]]:
-    """Run the agent loop. Returns answer, trace, document chunks, and web findings."""
+) -> tuple[LLMAnswer, list[dict], list, list[WebFinding], list[dict]]:
+    """Run the agent loop. Returns answer, trace, chunks, web findings, suggested_actions."""
     specs = build_tool_specs(tier)
     allowed_names = {s.name for s in specs}
     effective_question = resolve_follow_up_question(question, chat_history)
+    project_chat = ctx.project_id is not None and ctx.document_id is None
 
     model = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash-lite",
@@ -277,7 +378,8 @@ async def run_agent(
     tools = [_make_langchain_tool(ctx, tier, spec) for spec in specs]
     model_with_tools = model.bind_tools(tools)
 
-    messages: list[Any] = [SystemMessage(content=AGENT_SYSTEM)]
+    system = PROJECT_AGENT_SYSTEM if project_chat else AGENT_SYSTEM
+    messages: list[Any] = [SystemMessage(content=system)]
     if chat_history:
         for msg in chat_history:
             if msg["role"] == "user":
@@ -300,6 +402,7 @@ async def run_agent(
                         answer="I'm currently rate limited. Please wait and try again.",
                     ),
                     agent_trace,
+                    [],
                     [],
                     [],
                 )
@@ -343,13 +446,38 @@ async def run_agent(
             part for part in [requirements_context, stack_context] if part
         )
 
-    answer = await _synthesize_answer(
-        question=effective_question,
-        doc_context=doc_context,
-        web_context=web_context,
-        chat_history=chat_history,
-        agent_trace=public_agent_trace(agent_trace),
-        project_context=project_context,
-    )
+    public_trace = public_agent_trace(agent_trace)
+    suggested_actions: list[dict] = []
 
-    return answer, public_agent_trace(agent_trace), chunks, web_findings
+    if project_chat and ctx.project_id is not None:
+        client_context = await format_project_client_context(
+            ctx.db,
+            project_id=ctx.project_id,
+            user_id=ctx.user_id,
+        )
+        project_answer = await _synthesize_project_answer(
+            question=effective_question,
+            doc_context=doc_context,
+            web_context=web_context,
+            chat_history=chat_history,
+            agent_trace=public_trace,
+            client_context=client_context,
+            project_memory=project_context,
+        )
+        answer = LLMAnswer(
+            has_answer=project_answer.has_answer,
+            answer=project_answer.answer,
+        )
+        suggested_actions = [a.model_dump() for a in project_answer.suggested_actions]
+        public_trace = attach_suggested_actions(public_trace, project_answer.suggested_actions)
+    else:
+        answer = await _synthesize_answer(
+            question=effective_question,
+            doc_context=doc_context,
+            web_context=web_context,
+            chat_history=chat_history,
+            agent_trace=public_trace,
+            project_context=project_context,
+        )
+
+    return answer, public_trace, chunks, web_findings, suggested_actions

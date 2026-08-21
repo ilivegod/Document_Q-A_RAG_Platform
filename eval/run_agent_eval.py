@@ -65,7 +65,7 @@ async def run_agent_evaluation(
                 document_id=UUID(item_doc_id),
                 project_id=project_id,
             )
-            answer, trace, chunks, _web = await run_agent(
+            answer, trace, chunks, _web, _actions = await run_agent(
                 question,
                 ctx,
                 UserTier.PRO,

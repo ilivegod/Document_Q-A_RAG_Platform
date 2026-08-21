@@ -30,20 +30,13 @@ Use this script to validate lead discovery, AI proposal research, and the core a
 
 ## 3. Research + draft proposal (~5 min)
 
-1. On the lead detail page, click **Start research & proposal** (converts to a project if needed)
-2. You land on **Project chat** with research running — watch the progress log
-3. When research completes, review the **Proposal approach** card:
-   - AI suggests a proposal type (e.g. website redesign) with company observations
-   - Click **Confirm & draft proposal** (or **Change approach** to pick another type)
-4. Review the **Draft proposal** card:
-   - Read the markdown preview
-   - Click **Suggest improvements** with feedback (e.g. shorter timeline) → wait for revised draft
-   - Click **Approve & save**
-5. Open **Documents** — you should see:
-   - `{Client} - Company Brief.md` (seeded on convert)
-   - `{Client} - Proposal v1.md` (after approve)
-6. Wait until both documents show status **Ready** (embedding complete)
-7. In **Project chat**, ask: *“What did we propose for timeline and deliverables?”* — answer should cite the proposal document
+1. On the lead detail page, click **Discuss in project chat** (converts to a project if needed)
+2. In chat, describe what you think the business needs — e.g. new website, online ordering, local SEO
+3. Shiori replies conversationally; when ready, it suggests an action inline (e.g. **Research & draft website proposal**) with **Approve** / **Not now**
+4. Click **Approve** — drafting starts from your chat instructions (no web research)
+5. Review the draft inline → **Suggest improvements** or **Approve & save**
+6. Open **Documents** — Company Brief + approved proposal markdown
+7. Wait until documents are **Ready**, then ask in chat about the proposal (RAG)
 
 ## 4. Full engagement pipeline (~optional)
 

@@ -19,7 +19,6 @@ from app.services.sales_proposal import (
     revise_proposal,
     start_proposal_research,
 )
-from app.workers.tasks import research_sales_proposal_task
 
 router = APIRouter(prefix="/projects", tags=["sales-proposals"])
 
@@ -60,7 +59,6 @@ async def research_proposal(
         user_id=current_user.id,
         user_intent=body.user_intent,
     )
-    research_sales_proposal_task.delay(str(proposal.id))
     return _to_response(proposal)
 
 

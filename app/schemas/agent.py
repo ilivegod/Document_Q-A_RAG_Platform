@@ -9,6 +9,14 @@ class AgentStep(BaseModel):
     tool: str
     input: dict
     output_summary: str
+    suggested_actions: list["SuggestedAction"] | None = None
+
+
+class SuggestedAction(BaseModel):
+    action_type: str
+    label: str
+    description: str
+    user_intent: str | None = None
 
 
 class AgentQueryRequest(BaseModel):
@@ -26,3 +34,4 @@ class AgentQueryResponse(BaseModel):
     sources: list[Source]
     conversation_id: UUID | None = None
     agent_steps: list[AgentStep] = []
+    suggested_actions: list[SuggestedAction] = []

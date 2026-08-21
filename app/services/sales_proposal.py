@@ -1,10 +1,10 @@
-"""Sales proposal lifecycle: research, confirm, draft, revise, approve."""
+"""Sales proposal lifecycle: draft from conversation + project context, revise, approve."""
 
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
-from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -18,17 +18,12 @@ from app.config import settings
 from app.models.project import Project
 from app.models.prospect import Prospect
 from app.models.sales_proposal import SalesProposal, SalesProposalStatus
-from app.services.company_research import PROPOSAL_KINDS, run_company_research
+from app.services.company_research import PROPOSAL_KINDS
 from app.services.document_text import create_text_document_for_project
-from app.services.llm_errors import raise_llm_http_error
 from app.services.project_access import get_project_or_404
+from app.services.retrieval import similarity_search
 
 logger = logging.getLogger(__name__)
-
-
-class ProposalDraftResult(BaseModel):
-    title: str
-    markdown: str = Field(description="Full proposal body in markdown")
 
 
 def _append_progress(proposal: SalesProposal, message: str) -> None:
@@ -40,6 +35,76 @@ def _append_progress(proposal: SalesProposal, message: str) -> None:
         }
     )
     proposal.progress_log = log
+
+
+class ProposalDraftResult(BaseModel):
+    title: str
+    markdown: str = Field(description="Full proposal body in markdown")
+
+
+def infer_proposal_kind(user_intent: str | None) -> tuple[str, str]:
+    """Heuristic proposal type from user instructions — no web research."""
+    text = (user_intent or "").lower()
+    if re.search(r"\b(seo|visibility|google maps|local search)\b", text):
+        return "local_seo", PROPOSAL_KINDS["local_seo"]
+    if re.search(r"\b(maintenance|retainer|support|care plan)\b", text):
+        return "maintenance_retainer", PROPOSAL_KINDS["maintenance_retainer"]
+    if re.search(r"\b(presence|social|brand)\b", text):
+        return "digital_presence", PROPOSAL_KINDS["digital_presence"]
+    if re.search(r"\b(website|redesign|site|web app|landing page)\b", text):
+        return "website_redesign", PROPOSAL_KINDS["website_redesign"]
+    return "general_pitch", PROPOSAL_KINDS["general_pitch"]
+
+
+async def build_proposal_source_context(
+    db: AsyncSession,
+    *,
+    project_id: UUID,
+    user_id: UUID,
+    user_intent: str | None,
+) -> dict:
+    """Gather lead, project, user instructions, and optional project-doc RAG excerpts."""
+    project = await get_project_or_404(project_id, user_id, db)
+    prospect: Prospect | None = None
+    if project.prospect_id:
+        prospect = await db.get(Prospect, project.prospect_id)
+
+    rag_excerpts: list[str] = []
+    query = user_intent or project.description or project.name
+    if query:
+        try:
+            chunks = await similarity_search(
+                question=query[:500],
+                db=db,
+                user_id=user_id,
+                project_id=project_id,
+                k=6,
+            )
+            for chunk in chunks:
+                rag_excerpts.append(chunk.content.strip()[:800])
+        except Exception as exc:
+            logger.warning("Proposal RAG lookup failed: %s", exc)
+
+    return {
+        "client_name": project.client_name or project.name,
+        "project_description": project.description,
+        "user_instructions": user_intent or "",
+        "lead": {
+            "business_name": prospect.business_name if prospect else None,
+            "website_url": prospect.website_url if prospect else None,
+            "website_status": prospect.website_status.value if prospect else None,
+            "fit_summary": prospect.fit_summary if prospect else None,
+            "pitch_angle": prospect.pitch_angle if prospect else None,
+            "audit_signals": prospect.audit_signals if prospect else None,
+        }
+        if prospect
+        else None,
+        "project_document_excerpts": rag_excerpts,
+        "source_note": (
+            "Draft using ONLY user instructions, lead fields above, and document excerpts. "
+            "Do not invent facts or use internet research."
+        ),
+    }
 
 
 async def get_active_proposal(
@@ -68,6 +133,7 @@ async def start_proposal_research(
     user_id: UUID,
     user_intent: str | None = None,
 ) -> SalesProposal:
+    """Start drafting a proposal from chat-approved user instructions (no web research)."""
     project = await get_project_or_404(project_id, user_id, db)
 
     existing = await get_active_proposal(db, project_id, user_id)
@@ -77,7 +143,7 @@ async def start_proposal_research(
     }:
         raise HTTPException(
             status_code=409,
-            detail="A proposal research job is already in progress for this project.",
+            detail="A proposal draft is already in progress for this project.",
         )
     if existing and existing.status in {
         SalesProposalStatus.AWAITING_CONFIRMATION,
@@ -85,78 +151,64 @@ async def start_proposal_research(
     }:
         raise HTTPException(
             status_code=409,
-            detail="An active proposal already exists. Confirm, revise, or approve it first.",
+            detail="An active proposal already exists. Revise or approve it first.",
         )
+
+    if not (user_intent or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Describe what to write in the conversation before approving the draft action.",
+        )
+
+    source_context = await build_proposal_source_context(
+        db,
+        project_id=project_id,
+        user_id=user_id,
+        user_intent=user_intent,
+    )
+    kind, kind_label = infer_proposal_kind(user_intent)
 
     proposal = SalesProposal(
         user_id=user_id,
         project_id=project_id,
         prospect_id=project.prospect_id,
-        status=SalesProposalStatus.RESEARCHING,
-        user_intent=user_intent,
-        current_step="Queued for research",
+        status=SalesProposalStatus.DRAFTING,
+        user_intent=user_intent.strip(),
+        research_summary=source_context,
+        proposal_kind=kind,
+        proposal_kind_label=kind_label,
+        current_step="Drafting from your instructions",
         progress_log=[],
     )
-    _append_progress(proposal, "Research job queued")
+    _append_progress(proposal, "Draft queued from your chat instructions")
     db.add(proposal)
     await db.commit()
     await db.refresh(proposal)
+
+    from app.workers.tasks import draft_sales_proposal_task
+
+    draft_sales_proposal_task.delay(str(proposal.id))
     return proposal
 
 
 async def run_proposal_research_job(proposal_id: UUID) -> None:
-    """Celery worker: web + LLM research → awaiting_confirmation."""
+    """Legacy Celery entrypoint — forwards to draft job if still marked researching."""
     engine = create_async_engine(settings.database_url)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with session_factory() as db:
             proposal = await db.get(SalesProposal, proposal_id)
             if not proposal:
-                logger.error("Sales proposal %s not found", proposal_id)
                 return
-            if proposal.status != SalesProposalStatus.RESEARCHING:
-                return
-
-            project = await db.get(Project, proposal.project_id)
-            if not project:
-                proposal.status = SalesProposalStatus.FAILED
-                proposal.error_message = "Project not found"
+            if proposal.status == SalesProposalStatus.RESEARCHING:
+                proposal.status = SalesProposalStatus.DRAFTING
+                proposal.current_step = "Drafting from your instructions"
                 await db.commit()
-                return
-
-            proposal.current_step = "Researching company and web presence"
-            _append_progress(proposal, proposal.current_step)
-            await db.commit()
-
-            try:
-                result = await run_company_research(
-                    db,
-                    prospect_id=proposal.prospect_id or project.prospect_id,
-                    project_name=project.client_name or project.name,
-                    user_intent=proposal.user_intent,
-                )
-            except Exception as exc:
-                logger.exception("Proposal research failed for %s", proposal_id)
-                proposal.status = SalesProposalStatus.FAILED
-                proposal.error_message = str(exc)[:500]
-                proposal.current_step = "Research failed"
-                _append_progress(proposal, f"Failed: {proposal.error_message}")
-                await db.commit()
-                return
-
-            proposal.research_summary = result["research_summary"]
-            proposal.proposal_kind = result["proposal_kind"]
-            proposal.proposal_kind_label = result["proposal_kind_label"]
-            proposal.confirmation_question = result["confirmation_question"]
-            proposal.status = SalesProposalStatus.AWAITING_CONFIRMATION
-            proposal.current_step = "Awaiting your confirmation on proposal approach"
-            _append_progress(
-                proposal,
-                f"Suggested: {proposal.proposal_kind_label} — {result.get('rationale', '')}",
-            )
-            await db.commit()
     finally:
         await engine.dispose()
+    from app.workers.tasks import draft_sales_proposal_task
+
+    draft_sales_proposal_task.delay(str(proposal_id))
 
 
 async def confirm_proposal_type(
@@ -204,9 +256,6 @@ async def run_proposal_draft_job(proposal_id: UUID, *, is_revision: bool = False
                 return
 
             project = await db.get(Project, proposal.project_id)
-            prospect = None
-            if proposal.prospect_id:
-                prospect = await db.get(Prospect, proposal.prospect_id)
 
             research = proposal.research_summary or {}
             revision_feedback = ""
@@ -218,24 +267,31 @@ async def run_proposal_draft_job(proposal_id: UUID, *, is_revision: bool = False
                 """Write a concise, client-ready sales proposal in markdown for a boutique dev agency.
 
 Client: {client_name}
-Proposal type: {proposal_label} ({proposal_kind})
-User intent: {user_intent}
+Document type: {proposal_label}
 
-Company research:
-{research_json}
+PRIMARY SOURCE — what the user asked for (follow this closely):
+{user_intent}
+
+Supporting context (lead data, project notes, uploaded document excerpts — use only what is here):
+{context_json}
 
 {revision_block}
+
+Rules:
+- Do NOT add facts from the internet or guess details not in the sources above.
+- If something is unknown, keep language general or omit it.
+- When the user gave specific deliverables or scope, include them verbatim where appropriate.
 
 Structure:
 - Title (# heading)
 - Executive summary
-- What we observed about their business
-- Proposed approach (scoped to the proposal type)
+- Understanding of the client (from provided context only)
+- Proposed approach
 - Deliverables (bullet list)
-- Timeline estimate (ranges, not fixed dates)
+- Timeline estimate (ranges)
 - Next steps
 
-Tone: professional, specific to this business, not generic boilerplate. No placeholder brackets.
+Tone: professional and specific to the instructions. No placeholder brackets.
 """
             )
 
@@ -250,9 +306,8 @@ Tone: professional, specific to this business, not generic boilerplate. No place
                     prompt.format(
                         client_name=project.client_name or project.name if project else "Client",
                         proposal_label=proposal.proposal_kind_label or "Proposal",
-                        proposal_kind=proposal.proposal_kind or "general_pitch",
                         user_intent=proposal.user_intent or "",
-                        research_json=str(research)[:8000],
+                        context_json=str(research)[:8000],
                         revision_block=(
                             f"Apply this revision feedback:\n{revision_feedback}"
                             if revision_feedback
