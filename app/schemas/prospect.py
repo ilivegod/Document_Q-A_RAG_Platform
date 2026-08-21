@@ -12,6 +12,11 @@ from app.models.prospect import (
 )
 
 
+class PlaceAutocompleteSuggestion(BaseModel):
+    description: str
+    place_id: str
+
+
 class ProspectSearchCreate(BaseModel):
     location_query: str = Field(min_length=2, max_length=500)
     industry_keywords: str = Field(min_length=2, max_length=500)

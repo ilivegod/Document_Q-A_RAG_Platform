@@ -136,6 +136,8 @@ async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str)
     await db.commit()
 
     created = 0
+    skipped_duplicate = 0
+    skipped_filter = 0
 
     try:
         await _append_progress(
@@ -206,6 +208,7 @@ async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str)
                 )
             )
             if existing.scalar_one_or_none():
+                skipped_duplicate += 1
                 await _append_progress(
                     db,
                     search,
@@ -236,6 +239,7 @@ async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str)
             audit = await audit_website(website_url)
 
             if search.filter_no_website and audit.website_status != WebsiteStatus.NONE:
+                skipped_filter += 1
                 await _append_progress(
                     db,
                     search,
@@ -247,6 +251,7 @@ async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str)
                 WebsiteStatus.NONE,
                 WebsiteStatus.POOR,
             ):
+                skipped_filter += 1
                 await _append_progress(
                     db,
                     search,
@@ -329,10 +334,24 @@ async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str)
         search.result_count = created
         search.completed_at = datetime.now(timezone.utc)
         search.error_message = None
+        reviewed = len(candidates)
+        summary_parts = [
+            f"Search complete — {created} lead(s) saved.",
+            f"Reviewed {reviewed} business{'es' if reviewed != 1 else ''}.",
+        ]
+        if skipped_filter:
+            summary_parts.append(f"{skipped_filter} skipped by filters.")
+        if skipped_duplicate:
+            summary_parts.append(f"{skipped_duplicate} already in your list.")
+        if created == 0 and reviewed > 0:
+            if search.filter_no_website:
+                summary_parts.append("Tip: turn off “No website only” to include businesses with sites.")
+            elif search.filter_poor_website:
+                summary_parts.append("Tip: turn off “Poor website only” for a broader list.")
         await _append_progress(
             db,
             search,
-            f"Search complete — {created} lead(s) saved to your account.",
+            " ".join(summary_parts),
             "complete",
         )
     except Exception as exc:

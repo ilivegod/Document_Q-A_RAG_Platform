@@ -13,12 +13,55 @@ logger = logging.getLogger(__name__)
 
 PLACES_TEXT_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
 PLACES_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
+PLACES_AUTOCOMPLETE_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
 MAX_CANDIDATES = 10
 
 
 def _places_key() -> str:
     key = settings.google_places_api_key or settings.google_api_key
     return key
+
+
+async def autocomplete_locations(input_text: str) -> list[dict[str, str]]:
+    """Return location suggestions for the leads search form."""
+    query = input_text.strip()
+    if len(query) < 2:
+        return []
+
+    api_key = _places_key()
+    if not api_key or api_key == "test-key":
+        return []
+
+    params = {
+        "input": query,
+        "types": "(regions)",
+        "key": api_key,
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(PLACES_AUTOCOMPLETE_URL, params=params)
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("status") not in ("OK", "ZERO_RESULTS"):
+            logger.warning(
+                "Places autocomplete error: %s %s",
+                payload.get("status"),
+                payload.get("error_message", ""),
+            )
+            return []
+
+        suggestions: list[dict[str, str]] = []
+        for prediction in payload.get("predictions", [])[:8]:
+            description = prediction.get("description")
+            if not description:
+                continue
+            suggestions.append(
+                {
+                    "description": description,
+                    "place_id": prediction.get("place_id", ""),
+                }
+            )
+        return suggestions
 
 
 async def fetch_place_candidates(

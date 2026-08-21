@@ -12,12 +12,14 @@ from app.models.project import PipelineStage, Project, ProjectType
 from app.models.prospect import Prospect, ProspectSearch, ProspectStatus
 from app.models.user import User
 from app.schemas.prospect import (
+    PlaceAutocompleteSuggestion,
     ProspectConvertResponse,
     ProspectResponse,
     ProspectSearchCreate,
     ProspectSearchResponse,
     ProspectUpdate,
 )
+from app.services.prospect_discovery import autocomplete_locations
 from app.services.prospect_service import (
     cancel_prospect_search,
     get_active_prospect_search,
@@ -112,6 +114,33 @@ async def get_active_prospect_search_route(
     if search is None:
         return None
     return _search_to_response(search)
+
+
+@router.get("/prospecting/searches", response_model=list[ProspectSearchResponse])
+async def list_prospect_searches(
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(ProspectSearch)
+        .where(ProspectSearch.user_id == current_user.id)
+        .order_by(ProspectSearch.created_at.desc())
+        .limit(limit)
+    )
+    return [_search_to_response(search) for search in result.scalars().all()]
+
+
+@router.get(
+    "/prospecting/places/autocomplete",
+    response_model=list[PlaceAutocompleteSuggestion],
+)
+async def autocomplete_prospect_locations(
+    input: str = Query(..., min_length=2, max_length=200),
+    current_user: User = Depends(get_current_user),
+):
+    suggestions = await autocomplete_locations(input)
+    return [PlaceAutocompleteSuggestion(**item) for item in suggestions]
 
 
 @router.get("/prospecting/searches/{search_id}", response_model=ProspectSearchResponse)
