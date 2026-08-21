@@ -99,3 +99,9 @@ Upload documents from a **project** workspace (`/projects/{id}/upload`), not a g
 - MCP web research only when `MCP_WEB_ENABLED=true`
 
 See also [`DEPLOY.md`](DEPLOY.md) for Fly/Vercel and optional MCP setup.
+
+## Agency demo (MVP A)
+
+Discovery-first flow: find leads → export CSV → convert to engagement → SOW → delivery.
+
+See [`docs/demo/agency-first-user.md`](docs/demo/agency-first-user.md) for a 10-minute walkthrough.
