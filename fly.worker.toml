@@ -1,0 +1,22 @@
+# Fly.io deployment for Shiori Celery worker
+# Deploy: fly deploy -c fly.worker.toml (from Document_Q&A_RAG_Platform/)
+#
+# Create the app once: fly apps create docqa-celery
+# Set the same secrets as docqa-api (DATABASE_URL, REDIS_URL, GOOGLE_*, JWT_*, R2_*, etc.)
+
+app = "docqa-celery"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SENTRY_ENVIRONMENT = "production"
+
+[processes]
+  worker = "celery -A app.workers.celery_app worker --loglevel=info"
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
