@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 PLACES_TEXT_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
 PLACES_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
 PLACES_AUTOCOMPLETE_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
-MAX_CANDIDATES = 10
+MAX_CANDIDATES = 15
 
 
 def _places_key() -> str:

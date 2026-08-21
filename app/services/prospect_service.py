@@ -238,27 +238,31 @@ async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str)
             )
             audit = await audit_website(website_url)
 
-            if search.filter_no_website and audit.website_status != WebsiteStatus.NONE:
-                skipped_filter += 1
-                await _append_progress(
-                    db,
-                    search,
-                    f"Skipped {place['business_name']} — has a website (filter: no website only).",
-                    "skip_filter",
+            if search.filter_no_website or search.filter_poor_website:
+                matches_no_website = (
+                    search.filter_no_website
+                    and audit.website_status == WebsiteStatus.NONE
                 )
-                continue
-            if search.filter_poor_website and audit.website_status not in (
-                WebsiteStatus.NONE,
-                WebsiteStatus.POOR,
-            ):
-                skipped_filter += 1
-                await _append_progress(
-                    db,
-                    search,
-                    f"Skipped {place['business_name']} — website not poor enough for filters.",
-                    "skip_filter",
+                matches_poor_website = (
+                    search.filter_poor_website
+                    and audit.website_status
+                    in (WebsiteStatus.NONE, WebsiteStatus.POOR)
                 )
-                continue
+                if not (matches_no_website or matches_poor_website):
+                    skipped_filter += 1
+                    if search.filter_no_website and search.filter_poor_website:
+                        skip_reason = "doesn't match filters (no website or poor website)."
+                    elif search.filter_no_website:
+                        skip_reason = "has a website (filter: no website only)."
+                    else:
+                        skip_reason = "website not poor enough (filter: poor website only)."
+                    await _append_progress(
+                        db,
+                        search,
+                        f"Skipped {place['business_name']} — {skip_reason}",
+                        "skip_filter",
+                    )
+                    continue
 
             await _append_progress(
                 db,
@@ -343,11 +347,12 @@ async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str)
             summary_parts.append(f"{skipped_filter} skipped by filters.")
         if skipped_duplicate:
             summary_parts.append(f"{skipped_duplicate} already in your list.")
-        if created == 0 and reviewed > 0:
-            if search.filter_no_website:
-                summary_parts.append("Tip: turn off “No website only” to include businesses with sites.")
-            elif search.filter_poor_website:
-                summary_parts.append("Tip: turn off “Poor website only” for a broader list.")
+        if created == 0 and reviewed > 0 and (
+            search.filter_no_website or search.filter_poor_website
+        ):
+            summary_parts.append(
+                "Tip: turn off website filters for a broader list."
+            )
         await _append_progress(
             db,
             search,
