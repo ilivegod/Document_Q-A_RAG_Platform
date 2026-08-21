@@ -15,7 +15,7 @@ Use this script to validate lead discovery and the core agency OS in one session
 1. Open **Leads** (`/agency/leads`)
 2. Search: location `Austin, TX`, industry `dental clinic`, radius `10 km`
 3. Enable **Poor website only** (optional: **No website only**)
-4. Click **Find leads** and watch the progress log until complete (up to 15 leads)
+4. Click **Find leads** and watch the progress log until complete (choose 15–50 leads per search)
 5. Review the table: fit score, website badge, contact email
 6. Click **Export CSV** to download leads for your own outreach (email, CRM, etc.)
 

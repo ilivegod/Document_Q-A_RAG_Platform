@@ -102,6 +102,7 @@ class ProspectSearch(Base):
     radius_km = mapped_column(Integer, nullable=False, default=10)
     filter_no_website = mapped_column(Boolean, nullable=False, default=False)
     filter_poor_website = mapped_column(Boolean, nullable=False, default=False)
+    max_candidates = mapped_column(Integer, nullable=False, default=15)
     niche_notes = mapped_column(Text, nullable=True)
     status: Mapped[ProspectSearchStatus] = mapped_column(
         SQLEnum(

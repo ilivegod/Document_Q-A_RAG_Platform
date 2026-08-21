@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -19,7 +19,7 @@ from app.models.prospect import (
 )
 from app.services.contact_extraction import extract_contact_email_from_pages
 from app.services.prospect_discovery import (
-    MAX_CANDIDATES,
+    DEFAULT_MAX_CANDIDATES,
     enrich_place_candidate,
     fetch_place_candidates,
 )
@@ -149,7 +149,7 @@ async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str)
         await _append_progress(
             db,
             search,
-            f"Querying Google Places (up to {MAX_CANDIDATES} businesses)…",
+            f"Querying Google Places (up to {search.max_candidates} businesses)…",
             "places_query",
         )
 
@@ -157,6 +157,7 @@ async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str)
             search.location_query,
             search.industry_keywords,
             search.radius_km,
+            search.max_candidates,
         )
 
         if not candidates:
@@ -361,13 +362,16 @@ async def _run_prospect_discovery_with_session(db: AsyncSession, search_id: str)
         )
     except Exception as exc:
         logger.exception("Prospect search %s failed", search_id)
+        user_message = str(exc)
+        if user_message.startswith("Places API error:"):
+            user_message = user_message.replace("Places API error:", "Google Places error:", 1)
         search.status = ProspectSearchStatus.FAILED
-        search.error_message = str(exc)[:2000]
+        search.error_message = user_message[:2000]
         search.completed_at = datetime.now(timezone.utc)
         await _append_progress(
             db,
             search,
-            f"Search failed: {str(exc)[:500]}",
+            f"Search failed: {user_message[:500]}",
             "failed",
         )
         raise
@@ -399,6 +403,40 @@ async def cancel_prospect_search(search_id: UUID, user_id: UUID, db: AsyncSessio
     await db.commit()
     await db.refresh(search)
     return search
+
+
+async def delete_prospect_search(search_id: UUID, user_id: UUID, db: AsyncSession) -> int:
+    from fastapi import HTTPException
+
+    search = await db.get(ProspectSearch, search_id)
+    if not search or search.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Search not found")
+    if search.status in (
+        ProspectSearchStatus.PENDING,
+        ProspectSearchStatus.RUNNING,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete an active search. Stop it first or wait for it to finish.",
+        )
+
+    prospect_count_result = await db.execute(
+        select(Prospect.id).where(
+            Prospect.user_id == user_id,
+            Prospect.search_id == search_id,
+        )
+    )
+    deleted_leads = len(prospect_count_result.scalars().all())
+
+    await db.execute(
+        delete(Prospect).where(
+            Prospect.user_id == user_id,
+            Prospect.search_id == search_id,
+        )
+    )
+    await db.delete(search)
+    await db.commit()
+    return deleted_leads
 
 
 async def get_active_prospect_search(

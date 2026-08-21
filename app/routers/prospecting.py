@@ -22,6 +22,7 @@ from app.schemas.prospect import (
 from app.services.prospect_discovery import autocomplete_locations
 from app.services.prospect_service import (
     cancel_prospect_search,
+    delete_prospect_search,
     get_active_prospect_search,
     get_prospect_or_404,
     score_prospect_with_ai,
@@ -39,6 +40,7 @@ def _search_to_response(search: ProspectSearch) -> ProspectSearchResponse:
         radius_km=search.radius_km,
         filter_no_website=search.filter_no_website,
         filter_poor_website=search.filter_poor_website,
+        max_candidates=search.max_candidates,
         niche_notes=search.niche_notes,
         status=search.status,
         result_count=search.result_count,
@@ -96,6 +98,7 @@ async def create_prospect_search(
         radius_km=body.radius_km,
         filter_no_website=body.filter_no_website,
         filter_poor_website=body.filter_poor_website,
+        max_candidates=body.max_candidates,
         niche_notes=body.niche_notes,
     )
     db.add(search)
@@ -166,6 +169,15 @@ async def cancel_prospect_search_route(
 ):
     search = await cancel_prospect_search(search_id, current_user.id, db)
     return _search_to_response(search)
+
+
+@router.delete("/prospecting/searches/{search_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_prospect_search_route(
+    search_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await delete_prospect_search(search_id, current_user.id, db)
 
 
 @router.get("/prospects", response_model=list[ProspectResponse])
